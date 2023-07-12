@@ -14,6 +14,7 @@ const props = defineProps<{
   fixedRowsBefore?: [string, string | number][]
   fixedRowsBetween?: [string, string | number][]
   fixedRowsAfter?: [string, string | number][]
+  externalLink?: boolean
 }>()
 
 const xScaleNormalized = computed(() => {
@@ -53,27 +54,17 @@ const binding = reactive({
     <div v-if="title" text-center op75 py2>
       {{ title }}
     </div>
-    <div
-      relative of-hidden rounded-t-lg
-      :style="{
-        aspectRatio: props.aspectRatio,
-      }"
-    >
-      <div scale-101>
-        <img
-          lazy
-          :src="props.src"
-          absolute
-          :style="{
-            top: 0,
-            left: 0,
-            margin: 0,
-            transform: `translate(${-x * 100 / xSize}%, ${-y * 100 / ySize}%)`,
-            minWidth: `${xSize * 100}%`,
-          }"
-        >
-      </div>
-    </div>
+    <ImageMatrix
+      v-model:x="x"
+      v-model:y="y"
+      :src="props.src"
+      :x-count="xSize"
+      :y-count="ySize"
+      :x-padding="props.xPadding"
+      :y-padding="props.yPadding"
+      :aspect-ratio="props.aspectRatio"
+      :external-link="props.externalLink"
+    />
     <slot name="pre" v-bind="binding" />
     <slot v-bind="binding">
       <div grid="~ cols-[max-content_1fr_max-content] gap-x-3 gap-y-1 items-center" py3 px4>
@@ -89,7 +80,7 @@ const binding = reactive({
         <div font-mono text-sm op75 text-right>
           {{ xTitle }}
         </div>
-        <input v-model="x" class="slider" type="range" min="0" :max="xSize - 1" :step="1">
+        <input v-model.number="x" class="slider" type="range" min="0" :max="xSize - 1" :step="1">
         <div font-mono>
           {{ xScaleNormalized[x] }}
         </div>
@@ -105,7 +96,7 @@ const binding = reactive({
         <div font-mono text-sm op75 text-right>
           {{ yTitle }}
         </div>
-        <input v-model="y" class="slider" type="range" min="0" :max="ySize - 1" :step="1">
+        <input v-model.number="y" class="slider" type="range" min="0" :max="ySize - 1" :step="1">
         <div font-mono>
           {{ yScaleNormalized[y] }}
         </div>

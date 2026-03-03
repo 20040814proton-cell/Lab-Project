@@ -1,6 +1,7 @@
 node_modules
 .DS_Store
 dist
+dist/
 *.local
 .idea
 .presite
@@ -14,3 +15,8 @@ drafts
 *.log
 src/data/sponsors-circles.json
 public/assets/fonts
+.venv/
+public/images/
+photos/
+demo/
+deploy/backups/

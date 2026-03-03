@@ -1,0 +1,32 @@
+{$CADDY_SITE_HOST} {
+  encode zstd gzip
+
+  handle /images/* {
+    root * /srv/lab-static
+    file_server
+  }
+
+  handle /photos/* {
+    root * /srv/lab-static
+    file_server
+  }
+
+  handle /demo/* {
+    root * /srv/lab-static
+    file_server
+  }
+
+  handle /api/* {
+    reverse_proxy backend:8000
+  }
+
+  handle /static/* {
+    reverse_proxy backend:8000
+  }
+
+  handle {
+    root * /srv/dist
+    try_files {path} /index.html
+    file_server
+  }
+}

@@ -1,4 +1,0 @@
-# Upload these directories via SFTP to /srv/lab-static
-public/images -> /srv/lab-static/images
-photos -> /srv/lab-static/photos
-demo -> /srv/lab-static/demo

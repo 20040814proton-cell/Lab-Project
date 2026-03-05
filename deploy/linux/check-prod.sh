@@ -10,6 +10,10 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
+echo "SAFETY RED LINE:"
+echo "  NEVER use docker compose down -v"
+echo "  NEVER remove production docker volumes"
+
 get_env() {
   local key="$1"
   local default="${2:-}"
@@ -23,11 +27,12 @@ get_env() {
 }
 
 SITE_HOST="$(get_env "CADDY_SITE_HOST")"
-
-if [[ -z "$SITE_HOST" || "$SITE_HOST" == "example.com" ]]; then
-  echo "CADDY_SITE_HOST is not configured in deploy/.env.prod"
+if [[ -z "$SITE_HOST" ]]; then
+  echo "CADDY_SITE_HOST is not configured."
   exit 1
 fi
+
+DIST_HOST_DIR="/opt/lab-ecosystem/dist"
 
 echo "Checking docker and compose availability..."
 docker version >/dev/null
@@ -36,6 +41,28 @@ docker compose version >/dev/null
 echo "Validating compose configuration..."
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config >/dev/null
 
+if grep -q "Dockerfile.frontend" "$COMPOSE_FILE"; then
+  echo "Error: compose still contains frontend build config. Server-side frontend build is forbidden."
+  exit 1
+fi
+
+echo "Checking Caddy + backend routes in Caddyfile..."
+grep -q "handle /api/*" "$ROOT_DIR/deploy/docker/Caddyfile.prod"
+grep -q "handle /static/*" "$ROOT_DIR/deploy/docker/Caddyfile.prod"
+grep -q "try_files {path} /index.html" "$ROOT_DIR/deploy/docker/Caddyfile.prod"
+
+if [[ -d "$DIST_HOST_DIR" ]]; then
+  echo "Frontend dist directory exists: $DIST_HOST_DIR"
+else
+  echo "Warning: $DIST_HOST_DIR does not exist yet."
+fi
+
+if [[ -d /srv/lab-static ]]; then
+  echo "External static directory exists: /srv/lab-static"
+else
+  echo "Warning: /srv/lab-static does not exist yet."
+fi
+
 echo "Checking local port usage..."
 if ss -ltn | grep -qE ':(80|443)\s'; then
   echo "Warning: port 80 or 443 is already in use."
@@ -43,17 +70,13 @@ else
   echo "Ports 80 and 443 are free."
 fi
 
-if [[ -d /srv/lab-static ]]; then
-  echo "Static root exists: /srv/lab-static"
-else
-  echo "Warning: /srv/lab-static does not exist yet. Create it before deployment."
-fi
-
-echo "Checking DNS resolution for $SITE_HOST ..."
-if command -v getent >/dev/null 2>&1; then
+echo "Checking dns resolution for $SITE_HOST ..."
+if [[ "$SITE_HOST" =~ ^: ]]; then
+  echo "CADDY_SITE_HOST is port-only mode ($SITE_HOST), skip dns check."
+elif command -v getent >/dev/null 2>&1; then
   getent hosts "$SITE_HOST" || echo "Warning: DNS lookup failed for $SITE_HOST"
 else
-  echo "Warning: getent command not found, skip DNS check."
+  echo "Warning: getent command not found, skip dns check."
 fi
 
 echo "Current running services (if any):"

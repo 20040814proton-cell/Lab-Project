@@ -1,4 +1,4 @@
-{$CADDY_SITE_HOST} {
+{$CADDY_SITE_HOST:80} {
   encode zstd gzip
 
   handle /images/* {
@@ -25,7 +25,7 @@
   }
 
   handle {
-    root * /srv/dist
+    root * /srv
     try_files {path} /index.html
     file_server
   }

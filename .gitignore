@@ -1,4 +1,4 @@
-node_modules
+﻿node_modules
 .DS_Store
 dist
 dist/
@@ -15,8 +15,26 @@ drafts
 *.log
 src/data/sponsors-circles.json
 public/assets/fonts
+
+# Lab Ecosystem custom rules
 .venv/
+backend/__pycache__/
+backend/.venv/
+backend/static/uploads/
+*.pyc
+*.pyo
+
+# Deploy secrets and backups
+deploy/backups/
+deploy/.env.*
+!deploy/.env.example
+database_dumps/
+
+# Build/runtime outputs
+.output/
+
+# Externalized static assets
 public/images/
 photos/
 demo/
-deploy/backups/
+uploads/

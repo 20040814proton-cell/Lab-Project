@@ -12,6 +12,10 @@ COMPOSE_FILE="$ROOT_DIR/deploy/docker/docker-compose.prod.yml"
 ENV_FILE="$ROOT_DIR/deploy/.env.prod"
 BACKUP_DIR="$ROOT_DIR/deploy/backups"
 
+echo "SAFETY RED LINE:"
+echo "  NEVER use docker compose down -v"
+echo "  NEVER remove production docker volumes"
+
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing env file: $ENV_FILE"
   exit 1

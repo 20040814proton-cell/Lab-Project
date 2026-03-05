@@ -4,11 +4,16 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/deploy/docker/docker-compose.prod.yml"
 ENV_FILE="$ROOT_DIR/deploy/.env.prod"
+WITH_CADDY="${1:-}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing env file: $ENV_FILE"
   exit 1
 fi
+
+echo "SAFETY RED LINE:"
+echo "  NEVER run docker compose down -v"
+echo "  NEVER remove docker volumes for production"
 
 get_env() {
   local key="$1"
@@ -45,9 +50,14 @@ wait_http_ok() {
 }
 
 SITE_HOST="$(get_env "CADDY_SITE_HOST")"
-if [[ -z "$SITE_HOST" || "$SITE_HOST" == "example.com" ]]; then
+if [[ -z "$SITE_HOST" ]]; then
   echo "CADDY_SITE_HOST is not configured in deploy/.env.prod"
   exit 1
+fi
+
+HTTP_HOST_HEADER="$SITE_HOST"
+if [[ "$SITE_HOST" =~ ^: ]]; then
+  HTTP_HOST_HEADER=""
 fi
 
 cd "$ROOT_DIR"
@@ -56,26 +66,38 @@ docker version >/dev/null
 docker compose version >/dev/null
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config >/dev/null
 
+if grep -q "Dockerfile.frontend" "$COMPOSE_FILE"; then
+  echo "Error: compose still contains frontend build config. Server-side frontend build is forbidden."
+  exit 1
+fi
+
 if docker image inspect lab-backend:latest >/dev/null 2>&1; then
   docker tag lab-backend:latest lab-backend:rollback >/dev/null
 fi
-if docker image inspect lab-frontend-caddy:latest >/dev/null 2>&1; then
-  docker tag lab-frontend-caddy:latest lab-frontend-caddy:rollback >/dev/null
+
+echo "Deploy backend (server-side build allowed)."
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --build backend
+
+if [[ "$WITH_CADDY" == "--with-caddy" ]]; then
+  echo "Reload caddy because config/static mapping changed."
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d caddy
+elif [[ -z "$(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps -q caddy)" ]]; then
+  echo "Caddy is not running, start caddy service."
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d caddy
 fi
 
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --build
-
-if ! wait_http_ok "http://127.0.0.1/healthz" "$SITE_HOST"; then
-  echo "healthz check failed, triggering rollback..."
+if ! wait_http_ok "http://127.0.0.1/healthz" "$HTTP_HOST_HEADER"; then
+  echo "healthz check failed, triggering backend rollback..."
   "$ROOT_DIR/deploy/linux/rollback.sh"
   exit 1
 fi
 
-if ! wait_http_ok "http://127.0.0.1/readyz" "$SITE_HOST"; then
-  echo "readyz check failed, triggering rollback..."
+if ! wait_http_ok "http://127.0.0.1/readyz" "$HTTP_HOST_HEADER"; then
+  echo "readyz check failed, triggering backend rollback..."
   "$ROOT_DIR/deploy/linux/rollback.sh"
   exit 1
 fi
 
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
-echo "Production deployment succeeded for $SITE_HOST"
+echo "Backend deployment succeeded."
+echo "Reminder: frontend must be built on local machine and uploaded to /opt/lab-ecosystem/dist."

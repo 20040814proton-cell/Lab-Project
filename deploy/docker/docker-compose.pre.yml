@@ -1,0 +1,63 @@
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "34926:80"
+    volumes:
+      - ./Caddyfile.pre:/etc/caddy/Caddyfile:ro
+      - /opt/lab-ecosystem/dist:/srv:ro
+      - /srv/lab-static:/srv/lab-static:ro
+      - caddy_data_pre:/data
+      - caddy_config_pre:/config
+    networks:
+      - lab_net
+    restart: unless-stopped
+
+  backend:
+    image: lab-backend:latest
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.backend
+    env_file:
+      - ../.env.pre
+    expose:
+      - "8000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/static/uploads
+    networks:
+      - lab_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - lab_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+
+volumes:
+  caddy_data_pre:
+  caddy_config_pre:
+  mongo_data:
+  uploads_data:
+
+networks:
+  lab_net:
+    driver: bridge

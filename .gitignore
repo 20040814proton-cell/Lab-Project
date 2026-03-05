@@ -1,4 +1,4 @@
-node_modules
+﻿node_modules
 .DS_Store
 dist
 dist/
@@ -15,28 +15,26 @@ drafts
 *.log
 src/data/sponsors-circles.json
 public/assets/fonts
-demo/
 
-# =========================
-# 实验室系统自定义忽略规则
-# =========================
-
-# 1. 后端 (FastAPI & Python)
+# Lab Ecosystem custom rules
+.venv/
 backend/__pycache__/
 backend/.venv/
+backend/static/uploads/
 *.pyc
 *.pyo
 
-# 2. 部署与运维敏感数据
+# Deploy secrets and backups
 deploy/backups/
 deploy/.env.*
+!deploy/.env.example
 database_dumps/
 
-# 3. 前端动态生成或依赖 (保留模板原有的)
-# node_modules/ 
-# dist/
+# Build/runtime outputs
 .output/
 
-# 4. 业务数据文件 (禁止 Git 追踪用户上传的媒体)
+# Externalized static assets
+public/images/
 photos/
+demo/
 uploads/

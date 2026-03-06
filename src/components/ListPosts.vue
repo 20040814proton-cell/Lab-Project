@@ -1,153 +1,124 @@
 <script setup lang="ts">
-import type { Post } from '~/types'
-import { useRouter } from 'vue-router/auto'
-import { englishOnly, formatDate } from '~/logics'
+import { ref, onMounted } from 'vue'
+import MarkdownIt from 'markdown-it'
+import { useUserStore } from '~/stores/user'
+import { apiFetch } from '~/logics/api'
 
-const props = defineProps<{
-  type?: string
-  posts?: Post[]
-  extra?: Post[]
+const userStore = useUserStore()
+const emit = defineEmits<{
+  (e: 'edit', post: any): void
 }>()
 
-const router = useRouter()
-const routes: Post[] = router.getRoutes()
-  .filter(i => i.path.startsWith('/posts') && i.meta.frontmatter.date && !i.meta.frontmatter.draft)
-  .filter(i => !i.path.endsWith('.html') && (i.meta.frontmatter.type || 'blog').split('+').includes(props.type))
-  .map(i => ({
-    path: i.meta.frontmatter.redirect || i.path,
-    title: i.meta.frontmatter.title,
-    date: i.meta.frontmatter.date,
-    lang: i.meta.frontmatter.lang,
-    duration: i.meta.frontmatter.duration,
-    recording: i.meta.frontmatter.recording,
-    upcoming: i.meta.frontmatter.upcoming,
-    redirect: i.meta.frontmatter.redirect,
-    place: i.meta.frontmatter.place,
-  }))
+const props = defineProps<{
+  layout?: 'list' | 'grid'
+  viewBase?: string
+}>()
 
-const posts = computed(() =>
-  [...(props.posts || routes), ...props.extra || []]
-    .sort((a, b) => +new Date(b.date) - +new Date(a.date))
-    .filter(i => !englishOnly.value || !i.lang || i.lang === 'en'),
-)
+const md = new MarkdownIt()
+const posts = ref<any[]>([])
 
-const getYear = (a: Date | string | number) => new Date(a).getFullYear()
-const isFuture = (a?: Date | string | number) => a && new Date(a) > new Date()
-const isSameYear = (a?: Date | string | number, b?: Date | string | number) => a && b && getYear(a) === getYear(b)
-function isSameGroup(a: Post, b?: Post) {
-  return (isFuture(a.date) === isFuture(b?.date)) && isSameYear(a.date, b?.date)
+const fetchPosts = async () => {
+  try {
+    const res = await apiFetch('/api/posts/', {}, { auth: false })
+    if (res.ok)
+      posts.value = await res.json()
+  } catch (error) {
+    console.error(error)
+  }
 }
 
-function getGroupName(p: Post) {
-  if (isFuture(p.date))
-    return 'Upcoming'
-  return getYear(p.date)
+defineExpose({
+  fetchPosts,
+})
+
+const deletePost = async (id: string) => {
+  if (!confirm('确定要删除这条动态吗？'))
+    return
+  try {
+    const res = await apiFetch(`/api/posts/${id}`, {
+      method: 'DELETE',
+    })
+    if (res.ok)
+      await fetchPosts()
+    else
+      alert('删除失败')
+  } catch (error) {
+    console.error(error)
+  }
 }
+
+const getViewPath = (id: string) => {
+  const base = props.viewBase || '/news'
+  return `${base.replace(/\/$/, '')}/${id}`
+}
+
+onMounted(fetchPosts)
 </script>
 
 <template>
-  <ul>
-    <template v-if="!posts.length">
-      <div py2 op50>
-        { nothing here yet }
-      </div>
-    </template>
-
-    <template v-for="route, idx in posts" :key="route.path">
+  <div class="py-4">
+    <div :class="layout === 'grid' ? 'grid grid-cols-1 md:grid-cols-3 gap-6' : 'space-y-4'">
       <div
-        v-if="!isSameGroup(route, posts[idx - 1])"
-        select-none relative h20 pointer-events-none slide-enter
-        :style="{
-          '--enter-stage': idx - 2,
-          '--enter-step': '60ms',
-        }"
+        v-for="post in posts"
+        :key="post.id"
+        class="rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden"
+        :class="layout === 'grid' ? 'flex flex-col h-full' : 'p-6 bg-white/60 backdrop-blur-md'"
       >
-        <span text-8em color-transparent absolute left--3rem top--2rem font-bold text-stroke-2 text-stroke-hex-aaa op10>{{ getGroupName(route) }}</span>
-      </div>
-      <div
-        class="slide-enter"
-        :style="{
-          '--enter-stage': idx,
-          '--enter-step': '60ms',
-        }"
-      >
-        <component
-          :is="route.path.includes('://') ? 'a' : 'RouterLink'"
-          v-bind="
-            route.path.includes('://') ? {
-              href: route.path,
-              target: '_blank',
-              rel: 'noopener noreferrer',
-            } : {
-              to: route.path,
-            }
-          "
-          class="item block font-normal mb-6 mt-2 no-underline"
+        <div
+          v-if="layout === 'grid'"
+          class="w-full aspect-video bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 flex items-center justify-center relative overflow-hidden group cursor-pointer"
+          @click="$router.push(getViewPath(post.id))"
         >
-          <li class="no-underline" flex="~ col md:row gap-2 md:items-center">
-            <div class="title text-lg leading-1.2em" flex="~ gap-2 wrap">
-              <span
-                v-if="route.lang === 'zh'"
-                align-middle flex-none
-                class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 ml--12 mr2 my-auto hidden md:block"
-              >中文</span>
-              <span
-                v-if="route.lang === 'ja'"
-                align-middle flex-none
-                class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 ml--15 mr2 my-auto hidden md:block"
-              >日本語</span>
-              <span align-middle>{{ route.title }}</span>
-              <span
-                v-if="route.redirect"
-                align-middle op50 flex-none text-xs ml--1.5
-                i-carbon-arrow-up-right
-                title="External"
-              />
-            </div>
+          <template v-if="post.cover_image">
+            <img :src="post.cover_image" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
+          </template>
+          <template v-else>
+            <div class="i-carbon-image text-4xl opacity-10 dark:opacity-20 text-gray-500" />
+          </template>
 
-            <div flex="~ gap-2 items-center">
-              <span
-                v-if="route.inperson"
-                align-middle op50 flex-none
-                i-ri:group-2-line
-                title="In person"
-              />
-              <span
-                v-if="route.recording || route.video"
-                align-middle op50 flex-none
-                i-ri:film-line
-                title="Provided in video"
-              />
-              <span
-                v-if="route.radio"
-                align-middle op50 flex-none
-                i-ri:radio-line
-                title="Provided in radio"
-              />
-
-              <span text-sm op50 ws-nowrap>
-                {{ formatDate(route.date, true) }}
-              </span>
-              <span v-if="route.duration" text-sm op40 ws-nowrap>· {{ route.duration }}</span>
-              <span v-if="route.platform" text-sm op40 ws-nowrap>· {{ route.platform }}</span>
-              <span v-if="route.place" text-sm op40 ws-nowrap md:hidden>· {{ route.place }}</span>
-              <span
-                v-if="route.lang === 'zh'"
-                align-middle flex-none
-                class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 my-auto md:hidden"
-              >中文</span>
-              <span
-                v-if="route.lang === 'ja'"
-                align-middle flex-none
-                class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 my-auto md:hidden"
-              >日本語</span>
-            </div>
-          </li>
-          <div v-if="route.place" op50 text-sm hidden mt--2 md:block>
-            {{ route.place }}
+          <div
+            v-if="userStore.hasRole('teacher', 'superadmin')"
+            class="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <button class="p-1.5 bg-white/90 dark:bg-gray-800/90 rounded-full hover:bg-teal-500 hover:text-white transition shadow-sm" @click.stop="emit('edit', post)">
+              <div class="i-carbon-edit" />
+            </button>
+            <button class="p-1.5 bg-white/90 dark:bg-gray-800/90 rounded-full hover:bg-red-500 hover:text-white transition shadow-sm" @click.stop="deletePost(post.id)">
+              <div class="i-carbon-trash-can" />
+            </button>
           </div>
-        </component>
+        </div>
+
+        <div :class="layout === 'grid' ? 'p-5 flex flex-col flex-1' : ''">
+          <div
+            class="text-xl font-bold mb-2 font-serif text-gray-900 dark:text-gray-100 line-clamp-2 leading-snug"
+            :class="{ 'cursor-pointer hover:text-teal-600 transition-colors': layout === 'grid' }"
+            @click="layout === 'grid' && $router.push(getViewPath(post.id))"
+          >
+            {{ post.title }}
+          </div>
+
+          <div v-if="layout === 'grid'" class="text-sm text-gray-500 mb-4 line-clamp-2 leading-relaxed">
+            {{ post.summary || '暂无简介' }}
+          </div>
+
+          <div class="text-xs text-gray-400 mb-3 flex items-center gap-2">
+            <span>{{ new Date(post.date).toLocaleDateString('zh-CN') }}</span>
+            <span v-if="post.author" class="w-1 h-1 rounded-full bg-gray-300" />
+            <span v-if="post.author">{{ post.author }}</span>
+          </div>
+
+          <div v-if="layout !== 'grid'" class="prose dark:prose-invert opacity-90 leading-relaxed text-sm max-w-none" v-html="md.render(post.content || '')" />
+
+          <div v-if="layout === 'grid'" class="flex-1" />
+
+          <div v-if="layout === 'grid'" class="mt-4 flex justify-between items-center text-sm">
+            <span class="text-teal-600 dark:text-teal-400 font-medium hover:underline cursor-pointer" @click.stop="$router.push(getViewPath(post.id))">阅读更多</span>
+            <div class="i-carbon-arrow-right text-teal-600 dark:text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        </div>
       </div>
-    </template>
-  </ul>
+    </div>
+  </div>
 </template>
+

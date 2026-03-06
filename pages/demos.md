@@ -1,11 +1,7 @@
 ---
-title: Demos - Anthony Fu
-display: Demos
-subtitle: Demonstrations for projects I am working on from Tweets
-description: Demonstrations for projects I am working on from Tweets
-art: dots
+title: 成果展示
+wrapperClass: 'prose m-auto slide-enter-content'
 ---
-
-<!-- @layout-full-width -->
+<div class="mt-4"></div>
 
 <ListDemos />

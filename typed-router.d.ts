@@ -37,6 +37,27 @@ declare module 'vue-router/auto-routes' {
       { 404: ParamValue<false> },
       | never
     >,
+    '/about': RouteRecordInfo<
+      '/about',
+      '/about',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/activities': RouteRecordInfo<
+      '/activities',
+      '/activities',
+      Record<never, never>,
+      Record<never, never>,
+      | '/activities/[id]'
+    >,
+    '/activities/[id]': RouteRecordInfo<
+      '/activities/[id]',
+      '/activities/:id',
+      { id: ParamValue<true> },
+      { id: ParamValue<false> },
+      | never
+    >,
     '/bar': RouteRecordInfo<
       '/bar',
       '/bar',
@@ -72,11 +93,47 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/dashboard': RouteRecordInfo<
+      '/dashboard',
+      '/dashboard',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/demos': RouteRecordInfo<
       '/demos',
       '/demos',
       Record<never, never>,
       Record<never, never>,
+      | never
+    >,
+    '/downloads': RouteRecordInfo<
+      '/downloads',
+      '/downloads',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/forum': RouteRecordInfo<
+      '/forum',
+      '/forum',
+      Record<never, never>,
+      Record<never, never>,
+      | '/forum/'
+      | '/forum/[id]'
+    >,
+    '/forum/': RouteRecordInfo<
+      '/forum/',
+      '/forum',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/forum/[id]': RouteRecordInfo<
+      '/forum/[id]',
+      '/forum/:id',
+      { id: ParamValue<true> },
+      { id: ParamValue<false> },
       | never
     >,
     '/giving-talks': RouteRecordInfo<
@@ -86,11 +143,54 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/index.backup': RouteRecordInfo<
+      '/index.backup',
+      '/index/backup',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/invites': RouteRecordInfo<
+      '/invites',
+      '/invites',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/login': RouteRecordInfo<
+      '/login',
+      '/login',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/media': RouteRecordInfo<
       '/media',
       '/media',
       Record<never, never>,
       Record<never, never>,
+      | never
+    >,
+    '/news': RouteRecordInfo<
+      '/news',
+      '/news',
+      Record<never, never>,
+      Record<never, never>,
+      | '/news/'
+      | '/news/[id]'
+    >,
+    '/news/': RouteRecordInfo<
+      '/news/',
+      '/news',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/news/[id]': RouteRecordInfo<
+      '/news/[id]',
+      '/news/:id',
+      { id: ParamValue<true> },
+      { id: ParamValue<false> },
       | never
     >,
     '/notes': RouteRecordInfo<
@@ -119,6 +219,13 @@ declare module 'vue-router/auto-routes' {
       '/posts',
       Record<never, never>,
       Record<never, never>,
+      | never
+    >,
+    '/posts/[id]': RouteRecordInfo<
+      '/posts/[id]',
+      '/posts/:id',
+      { id: ParamValue<true> },
+      { id: ParamValue<false> },
       | never
     >,
     '/posts/about-yak-shaving': RouteRecordInfo<
@@ -285,6 +392,13 @@ declare module 'vue-router/auto-routes' {
     '/posts/github-co-authors': RouteRecordInfo<
       '/posts/github-co-authors',
       '/posts/github-co-authors',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/posts/hello-lab': RouteRecordInfo<
+      '/posts/hello-lab',
+      '/posts/hello-lab',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -709,9 +823,23 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/profile': RouteRecordInfo<
+      '/profile',
+      '/profile',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/projects': RouteRecordInfo<
       '/projects',
       '/projects',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/register': RouteRecordInfo<
+      '/register',
+      '/register',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -730,11 +858,32 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/students': RouteRecordInfo<
+      '/students',
+      '/students',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/talks': RouteRecordInfo<
       '/talks',
       '/talks',
       Record<never, never>,
       Record<never, never>,
+      | never
+    >,
+    '/teachers': RouteRecordInfo<
+      '/teachers',
+      '/teachers',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/u/[username]': RouteRecordInfo<
+      '/u/[username]',
+      '/u/:username',
+      { username: ParamValue<true> },
+      { username: ParamValue<false> },
       | never
     >,
     '/use': RouteRecordInfo<
@@ -757,7 +906,7 @@ declare module 'vue-router/auto-routes' {
    * @internal
    */
   export interface _RouteFileInfoMap {
-    'pages/index.md': {
+    'pages/index.vue': {
       routes:
         | '/'
       views:
@@ -766,6 +915,25 @@ declare module 'vue-router/auto-routes' {
     'pages/[...404].md': {
       routes:
         | '/[...404]'
+      views:
+        | never
+    }
+    'pages/about.md': {
+      routes:
+        | '/about'
+      views:
+        | never
+    }
+    'pages/activities.vue': {
+      routes:
+        | '/activities'
+        | '/activities/[id]'
+      views:
+        | 'default'
+    }
+    'pages/activities/[id].vue': {
+      routes:
+        | '/activities/[id]'
       views:
         | never
     }
@@ -799,9 +967,41 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
+    'pages/dashboard.vue': {
+      routes:
+        | '/dashboard'
+      views:
+        | never
+    }
     'pages/demos.md': {
       routes:
         | '/demos'
+      views:
+        | never
+    }
+    'pages/downloads.vue': {
+      routes:
+        | '/downloads'
+      views:
+        | never
+    }
+    'pages/forum.vue': {
+      routes:
+        | '/forum'
+        | '/forum/'
+        | '/forum/[id]'
+      views:
+        | 'default'
+    }
+    'pages/forum/index.vue': {
+      routes:
+        | '/forum/'
+      views:
+        | never
+    }
+    'pages/forum/[id].vue': {
+      routes:
+        | '/forum/[id]'
       views:
         | never
     }
@@ -811,9 +1011,47 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
+    'pages/index.backup.md': {
+      routes:
+        | '/index.backup'
+      views:
+        | never
+    }
+    'pages/invites.vue': {
+      routes:
+        | '/invites'
+      views:
+        | never
+    }
+    'pages/login.vue': {
+      routes:
+        | '/login'
+      views:
+        | never
+    }
     'pages/media.md': {
       routes:
         | '/media'
+      views:
+        | never
+    }
+    'pages/news.vue': {
+      routes:
+        | '/news'
+        | '/news/'
+        | '/news/[id]'
+      views:
+        | 'default'
+    }
+    'pages/news/index.vue': {
+      routes:
+        | '/news/'
+      views:
+        | never
+    }
+    'pages/news/[id].vue': {
+      routes:
+        | '/news/[id]'
       views:
         | never
     }
@@ -838,6 +1076,12 @@ declare module 'vue-router/auto-routes' {
     'pages/posts/index.md': {
       routes:
         | '/posts/'
+      views:
+        | never
+    }
+    'pages/posts/[id].vue': {
+      routes:
+        | '/posts/[id]'
       views:
         | never
     }
@@ -982,6 +1226,12 @@ declare module 'vue-router/auto-routes' {
     'pages/posts/github-co-authors.md': {
       routes:
         | '/posts/github-co-authors'
+      views:
+        | never
+    }
+    'pages/posts/hello-lab.md': {
+      routes:
+        | '/posts/hello-lab'
       views:
         | never
     }
@@ -1345,9 +1595,21 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
-    'pages/projects.md': {
+    'pages/profile.vue': {
+      routes:
+        | '/profile'
+      views:
+        | never
+    }
+    'pages/projects.vue': {
       routes:
         | '/projects'
+      views:
+        | never
+    }
+    'pages/register.vue': {
+      routes:
+        | '/register'
       views:
         | never
     }
@@ -1363,9 +1625,27 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
+    'pages/students.vue': {
+      routes:
+        | '/students'
+      views:
+        | never
+    }
     'pages/talks.md': {
       routes:
         | '/talks'
+      views:
+        | never
+    }
+    'pages/teachers.vue': {
+      routes:
+        | '/teachers'
+      views:
+        | never
+    }
+    'pages/u/[username].vue': {
+      routes:
+        | '/u/[username]'
       views:
         | never
     }

@@ -10,7 +10,15 @@ import {
   transformerDirectives,
 } from 'unocss'
 
+const enableWebFonts = process.env.UNO_WEB_FONTS === 'true'
+
 export default defineConfig({
+  theme: {
+    colors: {
+      primary: '#3eaf7c',
+      secondary: '#888888',
+    },
+  },
   shortcuts: [
     {
       'bg-base': 'bg-white dark:bg-black',
@@ -35,15 +43,19 @@ export default defineConfig({
     }),
     presetAttributify(),
     presetWind3(),
-    presetWebFonts({
-      fonts: {
-        sans: 'Inter',
-        mono: 'DM Mono',
-        condensed: 'Roboto Condensed',
-        wisper: 'Bad Script',
-      },
-      processors: createLocalFontProcessor(),
-    }),
+    ...(enableWebFonts
+      ? [
+          presetWebFonts({
+            fonts: {
+              sans: 'Inter',
+              mono: 'DM Mono',
+              condensed: 'Roboto Condensed',
+              wisper: 'Bad Script',
+            },
+            processors: createLocalFontProcessor(),
+          }),
+        ]
+      : []),
   ],
   transformers: [
     transformerDirectives(),

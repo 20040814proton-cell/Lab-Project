@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import SponsorsTiers from '../../public/sponsors.svg?component'
+import SponsorsTiers from '../assets/sponsors.svg?component'
 
 const showCircle = ref(true)
 </script>

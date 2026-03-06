@@ -1,12 +1,35 @@
 <script setup lang="ts">
-function toTop() {
-  window.scrollTo({
-    top: 0,
-    behavior: 'smooth',
-  })
-}
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useUserStore } from '~/stores/user'
 
-const { y: scroll } = useWindowScroll()
+const userStore = useUserStore()
+const router = useRouter()
+
+const baseNavItems = [
+  { label: '首页', path: '/dashboard', icon: 'i-carbon-home' },
+  { label: '学生管理', path: '/students', icon: 'i-carbon-user-multiple' },
+  { label: '教师团队', path: '/teachers', icon: 'i-carbon-education' },
+  { label: '项目记录', path: '/projects', icon: 'i-carbon-folder' },
+  { label: '学术活动', path: '/activities', icon: 'i-carbon-notebook' },
+  { label: '软件下载', path: '/downloads', icon: 'i-carbon-download' },
+  { label: '论坛', path: '/forum', icon: 'i-carbon-chat' },
+]
+
+const superAdminItems = [
+  { label: '邀请码', path: '/invites', icon: 'i-carbon-ticket' },
+]
+
+const visibleNavItems = computed(() => (
+  userStore.hasRole('superadmin')
+    ? [...baseNavItems, ...superAdminItems]
+    : baseNavItems
+))
+
+function handleLogout() {
+  userStore.logout()
+  router.push('/login')
+}
 </script>
 
 <template>
@@ -18,54 +41,44 @@ const { y: scroll } = useWindowScroll()
     >
       <Logo />
     </RouterLink>
-    <button
-      title="Scroll to top"
-      fixed right-3 bottom-3 w-10 h-10 hover:op100 rounded-full
-      hover-bg-hex-8883 transition duration-300 z-100 print:hidden
-      :class="scroll > 300 ? 'op30' : 'op0! pointer-events-none'"
-      @click="toTop()"
-    >
-      <div i-ri-arrow-up-line />
-    </button>
+
     <nav class="nav">
       <div class="spacer" />
       <div class="right" print:op0>
-        <RouterLink to="/posts" title="Blog">
-          <span class="lt-md:hidden">Blog</span>
-          <div i-ri-article-line md:hidden />
-        </RouterLink>
-        <RouterLink to="/projects" title="Projects">
-          <span class="lt-md:hidden">Projects</span>
-          <div i-ri-lightbulb-line class="md:hidden" />
-        </RouterLink>
-        <RouterLink to="/talks" class="lt-md:hidden" title="Talks">
-          Talks
-        </RouterLink>
-        <RouterLink to="/sponsors-list" title="Sponsors">
-          <span class="lt-md:hidden">Sponsors</span>
-          <div i-ri-heart-line class="md:hidden" />
-        </RouterLink>
-        <RouterLink to="/podcasts" class="lt-md:hidden" title="Podcasts">
-          <div i-ri-mic-line />
-        </RouterLink>
-        <RouterLink to="/photos" title="Photos">
-          <div i-ri-camera-3-line />
-        </RouterLink>
-        <RouterLink to="/demos" title="Demos">
-          <div i-ri-screenshot-line />
-        </RouterLink>
-        <!-- <RouterLink to="/chat" title="Let's Chat">
-          <div i-ri-chat-1-line />
-        </RouterLink> -->
-        <a href="https://bsky.app/profile/antfu.me" target="_blank" title="Bluesky" class="lt-md:hidden">
-          <div i-ri-bluesky-line />
-        </a>
-        <a href="https://github.com/antfu" target="_blank" title="GitHub" class="lt-md:hidden">
-          <div i-uil-github-alt />
-        </a>
-        <a href="/feed.xml" target="_blank" title="RSS" class="lt-md:hidden">
-          <div i-la-rss-square style="font-size:1.25rem; margin: 0 -0.125rem;" />
-        </a>
+        <Transition name="fade" mode="out-in">
+          <div v-if="userStore.token" key="user" class="flex gap-4 items-center">
+            <RouterLink v-for="item in visibleNavItems" :key="item.path" :to="item.path" :title="item.label">
+              <span class="lt-md:hidden">{{ item.label }}</span>
+              <div :class="item.icon" class="md:hidden" />
+            </RouterLink>
+
+            <div class="border-l border-gray-200 dark:border-gray-700 h-6 mx-2" />
+
+            <RouterLink to="/profile" title="个人资料" class="flex gap-2 items-center opacity-60 hover:opacity-100 transition">
+              <div class="i-carbon-user-avatar" />
+            </RouterLink>
+
+            <button title="退出登录" class="flex gap-2 items-center opacity-60 hover:opacity-100 transition" @click="handleLogout">
+              <div class="i-carbon-logout" />
+            </button>
+          </div>
+
+          <div v-else key="guest" class="flex gap-4 items-center">
+            <RouterLink to="/" title="首页" class="mr-2">
+              <span class="lt-md:hidden">首页</span>
+              <div class="i-carbon-home md:hidden" />
+            </RouterLink>
+            <RouterLink to="/forum" title="论坛" class="mr-2">
+              <span class="lt-md:hidden">论坛</span>
+              <div class="i-carbon-chat md:hidden" />
+            </RouterLink>
+            <RouterLink to="/login" title="登录" class="px-4 py-1.5 bg-teal-600 text-white rounded-full hover:bg-teal-700 transition shadow-lg shadow-teal-500/30 flex items-center gap-2 !opacity-100">
+              <span class="lt-md:hidden font-medium">登录</span>
+              <div class="i-carbon-login md:hidden" />
+            </RouterLink>
+          </div>
+        </Transition>
+
         <ToggleTheme />
       </div>
     </nav>
@@ -73,6 +86,16 @@ const { y: scroll } = useWindowScroll()
 </template>
 
 <style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
 .header h1 {
   margin-bottom: 0;
 }
@@ -95,10 +118,6 @@ const { y: scroll } = useWindowScroll()
   margin: auto;
 }
 
-.nav img {
-  margin-bottom: 0;
-}
-
 .nav a {
   cursor: pointer;
   text-decoration: none;
@@ -117,9 +136,6 @@ const { y: scroll } = useWindowScroll()
   display: grid;
   grid-gap: 1.2rem;
   grid-auto-flow: column;
-}
-
-.nav .right > * {
-  margin: auto;
+  align-items: center;
 }
 </style>

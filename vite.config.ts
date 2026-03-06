@@ -42,14 +42,104 @@ export default defineConfig({
       '@vueuse/core',
       'dayjs',
       'dayjs/plugin/localizedFormat',
+      'lucide-vue-next',
     ],
   },
   plugins: [
+    {
+      name: 'external-static-assets-virtual-import',
+      enforce: 'pre',
+      resolveId(source) {
+        if (/^\/(images|photos|demo)\//.test(source))
+          return `\0external-static:${source}`
+        return null
+      },
+      load(id) {
+        if (!id.startsWith('\0external-static:'))
+          return null
+        const url = id.slice('\0external-static:'.length)
+        return `export default ${JSON.stringify(url)}`
+      },
+    },
+
+    {
+      name: 'patch-lucide-fingerprint-url',
+      enforce: 'pre',
+      transform(code, id) {
+        if (id.includes('/lucide-vue-next/dist/esm/lucide-vue-next.js'))
+          return code.replaceAll('./icons/fingerprint.js', './icons/fp-icon.js')
+
+        if (id.includes('/lucide-vue-next/dist/esm/icons/index.js'))
+          return code.replaceAll('./fingerprint.js', './fp-icon.js')
+
+        return null
+      },
+      resolveId(source, importer) {
+        if (
+          source === './icons/fingerprint.js'
+          || source === './fingerprint.js'
+          || source.endsWith('/icons/fingerprint.js')
+          || (
+            source === './icons/fp-icon.js'
+            && importer?.includes('/lucide-vue-next/dist/esm/lucide-vue-next.js')
+          )
+          || (
+            source === './fp-icon.js'
+            && importer?.includes('/lucide-vue-next/dist/esm/icons/index.js')
+          )
+        ) {
+          return '\0lucide-fp-icon'
+        }
+        return null
+      },
+      load(id) {
+        if (id !== '\0lucide-fp-icon')
+          return null
+
+        return `
+import { h } from 'vue'
+
+const Fingerprint = (props = {}, { attrs } = { attrs: {} }) => {
+  const svgProps = {
+    xmlns: 'http://www.w3.org/2000/svg',
+    width: '24',
+    height: '24',
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    'stroke-width': '2',
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    ...attrs,
+    ...props,
+  }
+
+  return h('svg', svgProps, [
+    h('path', { d: 'M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4' }),
+    h('path', { d: 'M14 13.12c0 2.38 0 6.38-1 8.88' }),
+    h('path', { d: 'M17.29 21.02c.12-.6.43-2.3.5-3.02' }),
+    h('path', { d: 'M2 12a10 10 0 0 1 18-6' }),
+    h('path', { d: 'M2 16h.01' }),
+    h('path', { d: 'M21.8 16c.2-2 .131-5.354 0-6' }),
+    h('path', { d: 'M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2' }),
+    h('path', { d: 'M8.65 22c.21-.66.45-1.32.57-2' }),
+    h('path', { d: 'M9 6.8a6 6 0 0 1 9 5.2v2' }),
+  ])
+}
+
+export default Fingerprint
+`
+      },
+    },
+
     UnoCSS(),
 
     VueRouter({
       extensions: ['.vue', '.md'],
       routesFolder: 'pages',
+      // Avoid flaky dynamic module loading in local dev (e.g. /pages/index.vue fetch failures).
+      // Keep async chunks in production builds.
+      importMode: process.env.NODE_ENV === 'production' ? 'async' : 'sync',
       // logs: true,
       extendRoute(route) {
         const path = route.components.get('default')
@@ -228,6 +318,9 @@ export default defineConfig({
 
   build: {
     rollupOptions: {
+      external(id) {
+        return /^\/(images|photos|demo)\//.test(id)
+      },
       onwarn(warning, next) {
         if (warning.code !== 'UNUSED_EXTERNAL_IMPORT')
           next(warning)
@@ -242,6 +335,18 @@ export default defineConfig({
 
 const ogSVg = fs.readFileSync('./scripts/og-template.svg', 'utf-8')
 
+function escapeXml(value: string | undefined) {
+  if (!value)
+    return ''
+
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
 async function generateOg(title: string, output: string) {
   if (fs.existsSync(output))
     return
@@ -251,9 +356,9 @@ async function generateOg(title: string, output: string) {
   const lines = title.trim().split(/(.{0,30})(?:\s|$)/g).filter(Boolean)
 
   const data: Record<string, string> = {
-    line1: lines[0],
-    line2: lines[1],
-    line3: lines[2],
+    line1: escapeXml(lines[0]),
+    line2: escapeXml(lines[1]),
+    line3: escapeXml(lines[2]),
   }
   const svg = ogSVg.replace(/\{\{([^}]+)\}\}/g, (_, name) => data[name] || '')
 

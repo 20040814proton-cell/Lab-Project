@@ -1,9 +1,7 @@
 ---
-title: Blog - Anthony Fu
-display: ''
-art: plum
+title: 论坛讨论
+wrapperClass: 'prose m-auto slide-enter-content'
 ---
+<div class="mt-4"></div>
 
-<SubNav />
-
-<ListPosts only-date type="blog" />
+<ListPosts />

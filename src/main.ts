@@ -6,10 +6,12 @@ import { createPinia } from 'pinia'
 import { ViteSSG } from 'vite-ssg'
 import { setupRouterScroller } from 'vue-router-better-scroller'
 import { routes } from 'vue-router/auto-routes'
+import { useUserStore } from './stores/user'
 import App from './App.vue'
 import '@unocss/reset/tailwind.css'
 
-import 'floating-vue/dist/style.css'
+import 'floating-vue/dist/style.css';
+import 'md-editor-v3/lib/style.css';
 
 import 'markdown-it-github-alerts/styles/github-colors-light.css'
 import 'markdown-it-github-alerts/styles/github-colors-dark-class.css'
@@ -49,9 +51,30 @@ export const createApp = ViteSSG(
         behavior: 'auto',
       })
 
-      router.beforeEach(() => {
+      const userStore = useUserStore()
+      userStore.init()
+
+      router.beforeEach((to, from, next) => {
         NProgress.start()
-      })
+        
+        // Auth Guard with Whitelist
+        const publicRoutes = ['/', '/login', '/register', '/about']
+        const publicPrefixes = ['/news', '/posts', '/forum', '/u']
+        
+        if (publicRoutes.includes(to.path) || publicPrefixes.some(p => to.path.startsWith(p))) {
+           next()
+           return
+        }
+
+        if (!userStore.isTokenValid()) {
+           if (userStore.token)
+             userStore.logout()
+           next('/login')
+           return
+        }
+        
+        next()
+     })
       router.afterEach(() => {
         NProgress.done()
       })

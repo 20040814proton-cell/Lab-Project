@@ -1,91 +1,88 @@
 <script setup lang="ts">
-const route = useRoute()
+import { useHead } from '@unhead/vue'
 
-const imageModel = ref<HTMLImageElement>()
-const imageAlt = ref<string>()
-
-function setImageModel(img: HTMLImageElement) {
-  imageModel.value = img
-  imageAlt.value = img.alt
-  const figure = img.closest('figure')
-  if (figure) {
-    const caption = figure.querySelector('figcaption')
-    if (caption?.textContent)
-      imageAlt.value ||= caption.textContent
-  }
-}
-
-useEventListener('click', async (e) => {
-  const path = Array.from(e.composedPath())
-  const first = path[0] as HTMLImageElement
-  if (!(first instanceof HTMLElement))
-    return
-  if (first.tagName !== 'IMG')
-    return
-  if (first.classList.contains('no-preview'))
-    return
-  if (path.some(el => el instanceof HTMLElement && ['A', 'BUTTON'].includes(el.tagName)))
-    return
-  if (!path.some(el => el instanceof HTMLElement && (el.classList.contains('prose') || el.classList.contains('photos'))))
-    return
-
-  // Do not open image when they are moving. Mainly for mobile to avoid conflict with hovering behavior.
-  const pos = first.getBoundingClientRect()
-  await new Promise(resolve => setTimeout(resolve, 50))
-  const newPos = first.getBoundingClientRect()
-  if (pos.left !== newPos.left || pos.top !== newPos.top)
-    return
-
-  setImageModel(first)
-})
-
-onKeyStroke('ArrowRight', (e) => {
-  if (!imageModel.value || imageModel.value.dataset.photoIndex == null)
-    return
-
-  const index = Number.parseInt(imageModel.value.dataset.photoIndex)
-  const nextIndex = index + 1
-  const nextImg = document.querySelector(`img[data-photo-index="${nextIndex}"]`) as HTMLImageElement | null
-  if (nextImg) {
-    setImageModel(nextImg)
-    e.preventDefault()
-  }
-})
-
-onKeyStroke('ArrowLeft', (e) => {
-  if (!imageModel.value || imageModel.value.dataset.photoIndex == null)
-    return
-
-  const index = Number.parseInt(imageModel.value.dataset.photoIndex)
-  const prevIndex = index - 1
-  const prevImg = document.querySelector(`img[data-photo-index="${prevIndex}"]`) as HTMLImageElement | null
-  if (prevImg) {
-    setImageModel(prevImg)
-    e.preventDefault()
-  }
-})
-
-onKeyStroke('Escape', (e) => {
-  if (imageModel.value) {
-    imageModel.value = undefined
-    e.preventDefault()
-  }
+useHead({
+  title: 'Lab Ecosystem',
+  meta: [
+    { name: 'description', content: 'Laboratory Ecosystem & Personal Space' },
+    { name: 'theme-color', content: '#ffffff' },
+  ],
 })
 </script>
 
 <template>
   <NavBar />
+  
   <main class="px-7 py-10 of-x-hidden">
-    <RouterView />
-    <Footer :key="route.path" />
+    <RouterView v-slot="{ Component, route }">
+      <Transition name="page" mode="out-in">
+        <div :key="route.path">
+          <component :is="Component" />
+        </div>
+      </Transition>
+    </RouterView>
   </main>
-  <Transition name="fade">
-    <div v-if="imageModel" fixed top-0 left-0 right-0 bottom-0 z-500 backdrop-blur-7 @click="imageModel = undefined">
-      <div absolute top-0 left-0 right-0 bottom-0 bg-black:50 z--1 />
-      <img :src="imageModel.src" :alt="imageModel.alt" :class="imageModel.className" max-w-screen max-h-screen w-full h-full object-contain>
-      <div v-if="imageAlt" text-white bg-black:50 absolute right-5 bottom-5 px2 py1 flex justify-center items-center>
-        {{ imageAlt }}
-      </div>
-    </div>
-  </Transition>
+  
+  <Footer />
+  
+  <ArtPlum />
 </template>
+
+<style>
+/* --- Global Overrides --- */
+
+/* 1. Transparency */
+html, body, #app, main {
+  background-color: transparent !important;
+}
+
+/* 2. Z-Index Safety */
+main {
+  position: relative;
+  z-index: 10;
+}
+
+/* 3. Typography: Songti (Serif) for Titles */
+/* Beautifies all H1 headers with Songti font */
+.prose h1 {
+  font-family: "Noto Serif SC", "Songti SC", "SimSun", "STSong", serif !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.15em !important;
+  margin-bottom: 1.5rem !important;
+  opacity: 0.9;
+  background: linear-gradient(to right, #1f2937, #4b5563);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.dark .prose h1 {
+  background: linear-gradient(to right, #e5e7eb, #9ca3af);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.prose h2, .prose h3 {
+  font-family: "Noto Serif SC", "Songti SC", "SimSun", serif !important;
+  letter-spacing: 0.05em;
+  opacity: 0.8;
+}
+
+/* 4. Utility Cleanups */
+.no-underline { text-decoration: none !important; }
+
+/* --- ✨ MIST TRANSITION ANIMATION ✨ --- */
+/* --- ✨ PAGE TRANSITION ANIMATION ✨ --- */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+</style>

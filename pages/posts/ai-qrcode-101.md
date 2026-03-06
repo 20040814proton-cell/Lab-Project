@@ -128,11 +128,11 @@ The parameters of the ControlNet affect when and how the control is applied to t
     <div absolute left="1/6" bg-yellow op80 w="3/6" h-full/>
   </div>
   <div absolute top-2.7em flex="~ col items-center" left="1/6" translate-x="-1/2">
-    <div i-ri-arrow-up-s-fill text-lg/>
+    <span i-ri-arrow-up-s-fill text-lg/>
     <div>Control Start</div>
   </div>
    <div absolute top-2.7em flex="~ col items-center" left="4/6" translate-x="-1/2">
-    <div i-ri-arrow-up-s-fill text-lg/>
+    <span i-ri-arrow-up-s-fill text-lg/>
     <div>Control End</div>
   </div>
 </div>
@@ -325,9 +325,9 @@ Meanwhile, the margin area of the QR Code also affects the look and feel, for ex
 
 <div flex="~ col items-center gap-4" py4>
 <QRCodeCompare scale-85 md:scale-100 h-100 input="/images/ai-qrcode-101-input-edit1-i.png" output="/images/ai-qrcode-101-input-edit1-o.jpg" />
-<div><div i-ri-arrow-down-line/> Adding some noise to the margin</div>
+<div><span i-ri-arrow-down-line/> Adding some noise to the margin</div>
 <QRCodeCompare scale-85 md:scale-100 h-100 input="/images/ai-qrcode-101-input-edit2-i.png" output="/images/ai-qrcode-101-input-edit2-o.jpg" />
-<div><div i-ri-arrow-down-line/> Manually connect some points in margin (Photoshop etc.)</div>
+<div><span i-ri-arrow-down-line/> Manually connect some points in margin (Photoshop etc.)</div>
 <QRCodeCompare scale-85 md:scale-100 h-100 input="/images/ai-qrcode-101-input-edit6-i.png" output="/images/ai-qrcode-101-input-edit6-o.jpg" />
 </div>
 
@@ -429,7 +429,7 @@ To help the QR codes more blend in, we find that it's helpful to include some fl
 
 #### Example Prompts
 
-<p class="code-wrap">
+<div class="code-wrap">
 
 **Ribbon** - by [代々木](https://www.xiaohongshu.com/user/profile/5be8fb806b58b745447aab0f)
 
@@ -449,19 +449,19 @@ To help the QR codes more blend in, we find that it's helpful to include some fl
 (1 girl:1.3), upper body, rosemaling patterns, Norwegian folk art, decorative designs, vibrant colors, (white birds:1.6), BREAK, (dark background:1.3)
 ```
 
-**Wave** - by [五倍速企鹅](https://v.douyin.com/iDLHquJ/)
+**Wave** - by [5x Penguin](https://v.douyin.com/iDLHquJ/)
 
 ```ruby
 (1 girl:1.3),(white dress:1.3), upper body, blonde hair, from side, decorative designs, (wave:1.3),BREAK, (blue background:1.3)
 ```
 
-**Leaf** - by [五倍速企鹅](https://v.douyin.com/iDLHquJ/)
+**Leaf** - by [5x Penguin](https://v.douyin.com/iDLHquJ/)
 
 ```ruby
 (1 girl:1.3),(pink dress:1.3), upper body, white hair, from side, decorative designs, (leaf:1.6),BREAK, (sunset background:1.3)
 ```
 
-</p>
+</div>
 
 <hr>
 

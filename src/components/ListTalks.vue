@@ -1,99 +1,60 @@
 <script setup lang="ts">
-import { talks } from '../../data/talks'
-import { englishOnly, formatDate } from '../logics'
+import { ref, onMounted } from 'vue'
+import MarkdownIt from 'markdown-it'
+import { apiFetch } from '~/logics/api'
 
-function getSlug(title: string) {
-  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-')
+const md = new MarkdownIt()
+const items = ref([])
+const showForm = ref(false)
+const newItem = ref({ title: '', content: '' })
+
+const fetchItems = async () => {
+  try {
+    const res = await apiFetch('/api/life/', {}, { auth: false })
+    if (res.ok) items.value = await res.json()
+  } catch (e) { console.error(e) }
 }
 
-function isFuture(date: string) {
-  return +new Date(date) > +new Date()
+const submitItem = async () => {
+  if (!newItem.value.title) return
+  await apiFetch('/api/life/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...newItem.value, date: new Date().toISOString() })
+  }, { auth: false })
+  newItem.value = { title: '', content: '' }
+  showForm.value = false
+  await fetchItems()
 }
 
-function daysLeft(date: string) {
-  const diff = +new Date(date) - +new Date()
-  return Math.ceil(diff / (1000 * 60 * 60 * 24))
-}
+onMounted(fetchItems)
 </script>
 
 <template>
-  <template v-for="talk, idx of talks" :key="idx">
-    <div v-if="!englishOnly || !talk.lang || talk.lang === 'en'">
-      <div v-if="idx !== 0" pt4>
-        <hr>
-      </div>
-      <h2 :id="getSlug(talk.title)" tabindex="-1" important-mb-0 :lang="talk.lang">
-        <span v-if="talk.series" text-lg font-400 op45 italic mb1>
-          {{ talk.series }}
-          <br>
-        </span>
-        {{ talk.title }}
-        <span
-          v-if="talk.lang === 'ja'"
-          align-top flex-none ml2
-          class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 my-auto"
-        >日本語</span>
-        <span
-          v-if="talk.lang === 'zh'"
-          align-top flex-none
-          class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 my-auto"
-        >中文</span>
-        <a class="header-anchor" :href="`#${getSlug(talk.title)}`" aria-hidden="true">#</a>
-      </h2>
-      <div v-if="talk.description" op75 pt2 :lang="talk.lang">
-        {{ talk.description }}
-      </div>
-      <div grid="~ cols-1 md:cols-[1fr_max-content] gap-4" pt6>
-        <template v-for="p, idx2 in talk.presentations" :key="idx2">
-          <template v-if="!englishOnly || !p.lang || p.lang === 'en'">
-            <div :lang="p.lang">
-              <a :href="p.conferenceUrl" target="_blank" rel="noopener noreferrer">
-                {{ p.conference }}
-              </a>
-              <span
-                v-if="p.lang === 'zh'"
-                align-top flex-none ml2
-                class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 my-auto"
-              >中文</span>
-              <span
-                v-if="p.lang === 'ja'"
-                align-top flex-none ml2
-                class="text-xs bg-zinc:15 text-zinc5 rounded px-1 py-0.5 my-auto"
-              >日本語</span>
-              <div text-sm op50>
-                {{ formatDate(p.date, false) }} · {{ p.location }}
-              </div>
-            </div>
-            <div flex="~ gap-3 justify-end items-center">
-              <a v-if="p.recording" :href="p.recording" target="_blank" rel="noopener noreferrer" op50 hover:op100 important-transition-opacity duration-500 important-border-0>
-                <div i-ri-play-large-line />
-                Watch
-              </a>
-              <a v-if="p.transcript" :href="p.transcript" target="_blank" rel="noopener noreferrer" op50 hover:op100 important-transition-opacity duration-500 important-border-0>
-                <div i-ri-file-list-3-line />
-                Transcript
-              </a>
-              <a v-if="p.spa" :href="p.spa" target="_blank" rel="noopener noreferrer" op50 hover:op100 important-transition-opacity duration-500 important-border-0>
-                <div i-ri-presentation-fill />
-                Slides
-              </a>
-              <a v-if="p.pdf" :href="p.pdf" target="_blank" rel="noopener noreferrer" op50 hover:op100 important-transition-opacity duration-500 important-border-0>
-                <div i-ri-download-2-line />
-                PDF
-              </a>
-              <a
-                v-if="isFuture(p.date)" :href="p.conferenceUrl" target="_blank"
-                rel="noopener noreferrer"
-                op50 hover:op100 important-transition-opacity duration-500 important-border-0
-                font-serif bg-gray:15 px2 rounded font-bold mr--2
-              >
-                <div i-ri-time-line />
-                in {{ daysLeft(p.date) }} days
-              </a>
-            </div>
-          </template>
-        </template>
+  <div class="py-4">
+    <div class="flex justify-end mb-6">
+      <button @click="showForm = !showForm" class="px-4 py-2 border border-gray-200/50 rounded-lg hover:bg-white/50 transition backdrop-blur-md text-sm flex items-center gap-2">
+        <span class="i-carbon-add" /> {{ showForm ? '取消' : '发布动态' }}
+      </button>
+    </div>
+
+    <div v-if="showForm" class="mb-8 p-6 rounded-xl border border-gray-200/50 bg-white/60 dark:bg-gray-900/60 backdrop-blur-md shadow-inner">
+       <input v-model="newItem.title" placeholder="发生了什么？" class="w-full mb-3 px-3 py-2 border border-gray-200/50 rounded bg-transparent focus:bg-white/50 transition outline-none" />
+       <textarea v-model="newItem.content" placeholder="详细说说 (支持 Markdown)..." rows="3" class="w-full mb-3 px-3 py-2 border border-gray-200/50 rounded bg-transparent focus:bg-white/50 transition outline-none font-mono text-sm"></textarea>
+       <button @click="submitItem" class="px-4 py-2 bg-black/80 text-white dark:bg-white/90 dark:text-black rounded hover:shadow-lg transition">发布</button>
+    </div>
+
+    <div class="space-y-4">
+      <div v-for="item in items" :key="item.id" 
+           class="p-6 rounded-xl border border-gray-200/50 dark:border-gray-700/50 
+                  bg-white/60 dark:bg-gray-900/60 backdrop-blur-md shadow-sm
+                  hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+        <div class="flex justify-between items-center mb-3">
+          <div class="text-lg font-bold">{{ item.title }}</div>
+          <div class="text-xs opacity-50 font-mono">{{ new Date(item.date).toLocaleDateString('zh-CN') }}</div>
+        </div>
+        <div class="prose dark:prose-invert opacity-80 text-sm max-w-none" v-html="md.render(item.content || '')"></div>
       </div>
     </div>
-  </template>
+  </div>
 </template>

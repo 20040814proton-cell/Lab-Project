@@ -14,6 +14,7 @@
     "prepare": "simple-git-hooks"
   },
   "dependencies": {
+    "@types/markdown-it": "^14.1.0",
     "@unhead/vue": "catalog:frontend",
     "@unocss/reset": "catalog:frontend",
     "@vueuse/core": "catalog:frontend",
@@ -21,8 +22,10 @@
     "d3-shape": "catalog:frontend",
     "dayjs": "catalog:frontend",
     "floating-vue": "catalog:frontend",
+    "markdown-it": "^14.1.0",
     "matter-attractors": "catalog:frontend",
     "matter-js": "catalog:frontend",
+    "md-editor-v3": "^6.3.1",
     "nprogress": "catalog:frontend",
     "pinia": "catalog:frontend",
     "pixi.js": "catalog:frontend",

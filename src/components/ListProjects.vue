@@ -1,131 +1,161 @@
 <script setup lang="ts">
-defineProps<{ projects: Record<string, any[]> }>()
+import { ref, onMounted, computed } from 'vue'
+import { apiFetch, withApiBase } from '~/logics/api'
 
-function slug(name: string) {
-  return name.toLowerCase().replace(/[\s\\/]+/g, '-')
+const students = ref<any[]>([])
+const loading = ref(true)
+const showForm = ref(false) // Toggle form visibility
+const errorMsg = ref('')
+
+// Form State
+const newMember = ref({ name: '', role: '', desc: '', link: '' })
+const selectedFile = ref<File | null>(null)
+const uploading = ref(false)
+
+// Fetch Logic
+const fetchStudents = async () => {
+  try {
+    const res = await apiFetch('/api/students/', {}, { auth: false })
+    if (!res.ok) throw new Error('Failed to fetch')
+    students.value = await res.json()
+  } catch (e: any) {
+    errorMsg.value = e.message
+  } finally {
+    loading.value = false
+  }
 }
+
+// File Handler
+const handleFileSelect = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (target.files && target.files[0]) {
+    selectedFile.value = target.files[0]
+  }
+}
+
+// Submit Logic
+const submitForm = async () => {
+  if (!newMember.value.name) return alert('请输入姓名')
+  uploading.value = true
+  
+  try {
+    let iconUrl = 'i-carbon-user-avatar-filled' // Default
+    
+    // 1. Upload Image
+    if (selectedFile.value) {
+      const formData = new FormData()
+      formData.append('file', selectedFile.value)
+      const uploadRes = await apiFetch('/api/upload/', {
+        method: 'POST',
+        body: formData
+      }, { auth: false })
+      if (uploadRes.ok) {
+        const data = await uploadRes.json()
+        // Ensure we handle the full URL if backend returns relative path
+        iconUrl = data.url || data.filename
+        iconUrl = withApiBase(iconUrl)
+      }
+    }
+
+    // 2. Create Member
+    const payload = { ...newMember.value, icon: iconUrl }
+    const createRes = await apiFetch('/api/students/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+
+    if (createRes.ok) {
+      // Reset and Refresh
+      newMember.value = { name: '', role: '', desc: '', link: '' }
+      selectedFile.value = null
+      showForm.value = false
+      await fetchStudents()
+    } else {
+      alert('创建失败')
+    }
+  } catch (e) {
+    console.error(e)
+    alert('提交出错')
+  } finally {
+    uploading.value = false
+  }
+}
+
+onMounted(fetchStudents)
+
+// Simplified Computed (No Categories needed if redundant)
+const list = computed(() => students.value)
 </script>
 
 <template>
-  <div class="max-w-300 mx-auto">
-    <p text-center mt--6 mb5 op50 text-lg italic>
-      Projects that I created or maintaining.
-    </p>
-    <div class="prose pb5 mx-auto mt10 text-center">
-      <div flex="~ gap-2 justify-center">
-        <a
-          href="https://github.com/antfu"
-          target="_blank"
-          class="group btn-blue inline-block"
-        >
-          <div
-            i-ph-github-logo-duotone
-            group-hover="i-ph-github-logo-fill text-blue"
-          />
-          GitHub
-        </a>
-        <a
-          href="https://releases.antfu.me"
-          target="_blank"
-          class="group btn-amber inline-block"
-        >
-          <div
-            i-ph-rocket-launch-duotone
-            group-hover="i-ph-rocket-launch-fill text-amber"
-          />
-          Recent Releases
-        </a>
-        <a
-          href="https://yak.antfu.me"
-          target="_blank"
-          class="group btn-lime inline-block"
-        >
-          <div
-            i-ph-cow-duotone
-            group-hover="i-ph-cow-duotone-fill text-lime"
-          />
-          Yak Map
-        </a>
-      </div>
-      <hr>
-    </div>
-    <div
-      v-for="key, cidx in Object.keys(projects)" :key="key" slide-enter
-      :style="{ '--enter-stage': cidx + 1 }"
-    >
-      <div
-        :id="slug(key)"
-        select-none relative h18 mt5 pointer-events-none slide-enter
-        :style="{
-          '--enter-stage': cidx - 2,
-          '--enter-step': '60ms',
-        }"
+  <div class="py-8">
+    <div class="flex justify-end mb-6">
+      <button 
+        @click="showForm = !showForm"
+        class="px-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition flex items-center gap-2 cursor-pointer"
       >
-        <span text-5em color-transparent absolute left--1rem top-0rem font-bold leading-1em text-stroke-1.5 text-stroke-hex-aaa op35 dark:op20>{{ key }}</span>
-      </div>
-      <div
-        class="project-grid py-2 max-w-500 w-max mx-auto"
-        grid="~ cols-1 md:cols-2 gap-4 lg:cols-3"
-      >
-        <a
-          v-for="item, idx in projects[key]"
-          :key="idx"
-          class="item relative flex items-center"
-          :href="item.link"
-          target="_blank"
-          :title="item.name"
+        <div class="i-carbon-add text-lg" />
+        {{ showForm ? '取消 (Cancel)' : '新增成员 (Add Member)' }}
+      </button>
+    </div>
+
+    <div v-if="showForm" class="p-6 mb-8 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm bg-gray-50/50 dark:bg-gray-800/50 transition-all duration-300 ease-in-out">
+      <h3 class="font-bold text-lg mb-4">填写新成员信息</h3>
+      <div class="grid gap-4 max-w-lg">
+        <input v-model="newMember.name" placeholder="姓名 (Name)" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-transparent focus:outline-none focus:border-gray-500" />
+        <input v-model="newMember.role" placeholder="职位/身份 (Role)" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-transparent focus:outline-none focus:border-gray-500" />
+        <textarea v-model="newMember.desc" placeholder="简介 (Bio)" rows="2" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-transparent focus:outline-none focus:border-gray-500" />
+        
+        <div class="flex items-center gap-4">
+          <span class="text-sm opacity-70">上传头像:</span>
+          <input type="file" @change="handleFileSelect" class="text-sm" />
+        </div>
+
+        <button 
+          @click="submitForm" 
+          :disabled="uploading"
+          class="mt-2 px-4 py-2 bg-black text-white dark:bg-white dark:text-black rounded hover:opacity-80 transition disabled:opacity-50 cursor-pointer"
         >
-          <div v-if="item.icon" class="pt-2 pr-5">
-            <Slidev v-if="item.icon === 'slidev'" class="text-4xl opacity-50" />
-            <VueUse v-else-if="item.icon === 'vueuse'" class="text-4xl opacity-50" />
-            <VueReactivity v-else-if="item.icon === 'vue-reactivity'" class="text-4xl opacity-50" />
-            <VueDemi v-else-if="item.icon === 'vue-demi'" class="text-4xl opacity-50" />
-            <Unocss v-else-if="item.icon === 'unocss'" class="text-4xl opacity-50" />
-            <Vitest v-else-if="item.icon === 'vitest'" class="text-4xl opacity-50" />
-            <Elk v-else-if="item.icon === 'elk'" class="text-4xl opacity-50" />
-            <AnthonyFu v-else-if="item.icon === 'af'" class="text-4xl opacity-50" />
-            <div v-else class="text-3xl opacity-50" :class="item.icon || 'i-carbon-unknown'" />
-          </div>
-          <div class="flex-auto">
-            <div class="text-normal">{{ item.name }}</div>
-            <div class="desc text-sm opacity-50 font-normal" v-html="item.desc" />
-          </div>
-        </a>
+          {{ uploading ? '提交中...' : '确认添加' }}
+        </button>
       </div>
     </div>
-    <div class="prose pb5 mx-auto mt10 text-center">
-      <div block mt-5>
-        <a href="https://antfu.me/stars-rank" target="_blank" op50>All projects sort by Stars</a>
-      </div>
-      <hr>
-      <SponsorButtons />
+
+    <div v-if="list.length" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <a 
+        v-for="item in list" 
+        :key="item.id"
+        :href="item.link" 
+        target="_blank"
+        class="group relative flex items-start gap-4 p-4 rounded-xl border border-transparent hover:border-gray-200 dark:hover:border-gray-700 hover:-translate-y-1 hover:shadow-lg hover:bg-gray-50/80 transition-all duration-300 ease-in-out"
+      >
+        <div class="shrink-0">
+            <img 
+              v-if="item.icon && item.icon.includes('/')" 
+              :src="item.icon" 
+              class="w-16 h-16 rounded-full object-cover border border-gray-200 dark:border-gray-700" 
+            />
+            <div 
+              v-else 
+              :class="item.icon || 'i-carbon-user'" 
+              class="w-16 h-16 text-4xl bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center opacity-80" 
+            />
+        </div>
+
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between">
+             <div class="font-bold text-lg truncate">{{ item.name }}</div>
+             <div class="i-carbon-arrow-up-right opacity-0 group-hover:opacity-100 transition text-sm" />
+          </div>
+          <div class="text-sm opacity-75 mb-1">{{ item.role }}</div>
+          <div class="text-sm opacity-60 leading-relaxed line-clamp-2">{{ item.desc }}</div>
+        </div>
+      </a>
     </div>
-  </div>
-  <div>
-    <div class="table-of-contents">
-      <div class="table-of-contents-anchor">
-        <div class="i-ri-menu-2-fill" />
-      </div>
-      <ul>
-        <li v-for="key of Object.keys(projects)" :key="key">
-          <a :href="`#${slug(key)}`">{{ key }}</a>
-        </li>
-      </ul>
+
+    <div v-else-if="!loading" class="text-center py-10 opacity-50">
+      暂无成员，点击上方按钮添加。
     </div>
   </div>
 </template>
-
-<style scoped>
-.project-grid a.item {
-  background: transparent;
-  font-size: 1.1rem;
-  width: 350px;
-  max-width: 100%;
-  padding: 0.5rem 0.875rem 0.875rem;
-  border-radius: 6px;
-}
-
-.project-grid a.item:hover {
-  background: #88888811;
-}
-</style>

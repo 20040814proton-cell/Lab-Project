@@ -128,6 +128,23 @@ Mongo 备份（默认保留 7 份）：
 bash deploy/linux/backup.sh 7
 ```
 
+初始化超级账号（首次）：
+
+```bash
+bash deploy/linux/init-superadmin.sh
+```
+
+默认账号密码：
+
+- 用户名：`superadmin`
+- 密码：`123456`
+
+重置已有超级账号密码：
+
+```bash
+bash deploy/linux/init-superadmin.sh superadmin "123456" "System Administrator" --reset-if-exists
+```
+
 ## 7. 验收清单
 
 - 安全：操作日志中没有 `-v` 参数命令。

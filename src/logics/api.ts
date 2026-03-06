@@ -1,6 +1,8 @@
 import { useUserStore } from '~/stores/user'
 
-export const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+const DEV_API_FALLBACK = 'http://127.0.0.1:8000'
+export const API_BASE = import.meta.env.VITE_API_BASE
+  || (import.meta.env.DEV ? DEV_API_FALLBACK : '/api')
 
 function isHttpUrl(value: string) {
   return /^https?:\/\//i.test(value)

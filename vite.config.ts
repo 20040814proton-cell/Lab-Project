@@ -35,6 +35,18 @@ export default defineConfig({
       { find: '~/', replacement: `${resolve(__dirname, 'src')}/` },
     ],
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/static': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+    },
+  },
   optimizeDeps: {
     include: [
       'vue',
@@ -50,7 +62,7 @@ export default defineConfig({
       name: 'external-static-assets-virtual-import',
       enforce: 'pre',
       resolveId(source) {
-        if (/^\/(images|photos|demo)\//.test(source))
+        if (/^\/(?:images|photos|demo)\//.test(source))
           return `\0external-static:${source}`
         return null
       },
@@ -319,7 +331,7 @@ export default Fingerprint
   build: {
     rollupOptions: {
       external(id) {
-        return /^\/(images|photos|demo)\//.test(id)
+        return /^\/(?:images|photos|demo)\//.test(id)
       },
       onwarn(warning, next) {
         if (warning.code !== 'UNUSED_EXTERNAL_IMPORT')
@@ -343,7 +355,7 @@ function escapeXml(value: string | undefined) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/\"/g, '&quot;')
+    .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;')
 }
 

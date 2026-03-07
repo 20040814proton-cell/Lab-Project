@@ -330,9 +330,9 @@ export default Fingerprint
 
   build: {
     rollupOptions: {
-      external(id) {
-        return /^\/(?:images|photos|demo)\//.test(id)
-      },
+      // Keep /images, /photos, /demo handled by the virtual static plugin above.
+      // Marking them as Rollup external causes Vite SSG runtime to resolve them as
+      // filesystem modules like file:///E:/images/* on Windows.
       onwarn(warning, next) {
         if (warning.code !== 'UNUSED_EXTERNAL_IMPORT')
           next(warning)

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { MdPreview, MdCatalog } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 import { apiFetch } from '~/logics/api'
+import { isDark } from '~/logics'
 
 const route = useRoute()
 const router = useRouter()
@@ -34,14 +35,15 @@ const readingTime = computed(() => {
     const words = post.value.content.trim().split(/\s+/).length
     return Math.ceil(words / 200) // Rough estimation
 })
+const mdTheme = computed(() => (isDark.value ? 'dark' : 'light'))
 
 onMounted(fetchPost)
 </script>
 
 <template>
-<div class="min-h-screen pt-24 pb-20 px-6 max-w-4xl mx-auto">
+<div class="reader-page min-h-screen pt-24 pb-20 px-6 max-w-4xl mx-auto">
     <!-- Back Button -->
-    <button @click="router.back()" class="mb-8 flex items-center gap-2 text-gray-500 hover:text-teal-600 transition group">
+    <button @click="router.back()" class="reader-back-button mb-8 flex items-center gap-2 transition group">
         <span class="i-carbon-arrow-left group-hover:-translate-x-1 transition-transform"></span>
         <span class="font-serif">返回列表</span>
     </button>
@@ -53,15 +55,15 @@ onMounted(fetchPost)
     <div v-else-if="post" class="animate-enter">
         <!-- Header -->
         <header class="mb-10 text-center">
-             <div class="text-sm text-teal-600 font-mono mb-3 uppercase tracking-wider flex items-center justify-center gap-2">
+             <div class="reader-meta text-sm font-mono mb-3 uppercase tracking-wider flex items-center justify-center gap-2">
                  <span>{{ new Date(post.date).toLocaleDateString() }}</span>
                  <span class="w-1 h-1 rounded-full bg-teal-300"></span>
                  <span>{{ readingTime }} min read</span>
              </div>
-             <h1 class="text-3xl md:text-5xl font-serif font-bold text-gray-900 dark:text-gray-100 leading-tight mb-6">
+             <h1 class="reader-title text-3xl md:text-5xl font-serif font-bold leading-tight mb-6">
                  {{ post.title }}
              </h1>
-             <div class="flex items-center justify-center gap-3 text-sm text-gray-500">
+             <div class="reader-meta flex items-center justify-center gap-3 text-sm">
                   <span v-if="post.author" class="flex items-center gap-2">
                       <span class="w-6 h-6 rounded-full bg-gray-200 block"></span> {{ post.author }}
                   </span>
@@ -69,7 +71,7 @@ onMounted(fetchPost)
         </header>
 
         <!-- Cover -->
-        <div v-if="post.cover_image" class="mb-12 aspect-video rounded-2xl overflow-hidden shadow-2xl shadow-teal-900/10">
+        <div v-if="post.cover_image" class="reader-cover mb-12 aspect-video rounded-2xl overflow-hidden">
             <img :src="post.cover_image" class="w-full h-full object-cover" />
         </div>
 
@@ -78,14 +80,14 @@ onMounted(fetchPost)
         <!-- Two-column layout: Content + Toc -->
         <div class="grid grid-cols-1 lg:grid-cols-[1fr_250px] gap-8 items-start relative">
 
-          <article class="bg-white/50 backdrop-blur-sm p-8 rounded-xl shadow-sm min-w-0">
-             <MdPreview :editorId="editorId" :modelValue="post.content" />
+          <article class="reader-surface reader-surface--primary p-8 rounded-xl min-w-0">
+             <MdPreview :editorId="editorId" :modelValue="post.content" :theme="mdTheme" class="reader-md" />
           </article>
 
           <aside class="hidden lg:block sticky top-24 w-full">
-             <div class="bg-white/80 backdrop-blur rounded-lg p-4 shadow-sm border border-gray-100 dark:bg-gray-800/80 dark:border-gray-700">
+             <div class="reader-panel reader-toc rounded-lg p-4">
                 <div class="font-bold text-gray-900 dark:text-gray-100 mb-2 pl-2 border-l-4 border-teal-500">目录</div>
-                <MdCatalog :editorId="editorId" :scrollElement="scrollElement" />
+                <MdCatalog :editorId="editorId" :scrollElement="scrollElement" :theme="mdTheme" />
              </div>
           </aside>
 

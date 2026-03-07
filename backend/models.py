@@ -27,6 +27,7 @@ class Student(Document):
     major: Optional[str] = None
     interests: list[str] = []
     bio: Optional[str] = None
+    public_email: Optional[str] = None
     
     class Settings:
         name = "students" # MongoDB collection name
@@ -106,6 +107,8 @@ class Activity(Document):
     content: str = ""
     cover_image: Optional[str] = None
 
+    created_by_id: Optional[str] = None
+    created_by_username: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.now)
 
     class Settings:
@@ -121,6 +124,8 @@ class Project(Document):
     members: list[str] = []
     cover_image: Optional[str] = None
     repo_url: Optional[str] = None
+    created_by_id: Optional[str] = None
+    created_by_username: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.now)
 
     class Settings:
@@ -135,6 +140,8 @@ class Software(Document):
     download_url: str       # External link (Drive/GitHub)
     download_count: int = 0
     cover_image: Optional[str] = None
+    created_by_id: Optional[str] = None
+    created_by_username: Optional[str] = None
     upload_date: datetime = Field(default_factory=datetime.now)
     
     class Settings:
@@ -153,6 +160,16 @@ class InviteCode(Document):
 
     class Settings:
         name = "invite_codes"
+
+
+class RegistrationGradePolicy(Document):
+    policy_key: str = "student_registration_grade_policy"
+    allowed_grades: list[int] = Field(default_factory=list)
+    updated_by: Optional[str] = None
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+    class Settings:
+        name = "registration_grade_policy"
 
 class ForumPost(Document):
     title: str

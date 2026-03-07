@@ -17,6 +17,16 @@ const batchCount = ref(1)
 const creating = ref(false)
 const copiedCode = ref<string | null>(null)
 const selectedIds = ref<string[]>([])
+const gradePolicyLoading = ref(false)
+const gradePolicySaving = ref(false)
+const gradeInput = ref('')
+const gradePolicy = ref({
+  allowed_grades: [] as number[],
+  effective_grades: [] as number[],
+  source: 'default',
+  updated_by: '',
+  updated_at: '',
+})
 
 const fetchInvites = async () => {
   loading.value = true
@@ -25,8 +35,72 @@ const fetchInvites = async () => {
     if (res.ok)
       list.value = await res.json()
     selectedIds.value = []
+    await fetchGradePolicy()
   } finally {
     loading.value = false
+  }
+}
+
+const parseGradeInput = (raw: string) => {
+  const items = raw
+    .split(/[,，\s]+/)
+    .map(part => Number(part.trim()))
+    .filter(num => Number.isInteger(num) && num >= 1900 && num <= 3000)
+  return Array.from(new Set(items)).sort((a, b) => b - a)
+}
+
+const syncGradeInput = () => {
+  gradeInput.value = gradePolicy.value.allowed_grades.join(', ')
+}
+
+const fetchGradePolicy = async () => {
+  if (!userStore.hasRole('superadmin'))
+    return
+  gradePolicyLoading.value = true
+  try {
+    const res = await apiFetch('/api/invites/grade-policy')
+    if (!res.ok)
+      return
+    const data = await res.json()
+    gradePolicy.value = {
+      allowed_grades: Array.isArray(data.allowed_grades) ? data.allowed_grades : [],
+      effective_grades: Array.isArray(data.effective_grades) ? data.effective_grades : [],
+      source: data.source || 'default',
+      updated_by: data.updated_by || '',
+      updated_at: data.updated_at || '',
+    }
+    syncGradeInput()
+  } finally {
+    gradePolicyLoading.value = false
+  }
+}
+
+const saveGradePolicy = async () => {
+  gradePolicySaving.value = true
+  try {
+    const allowed_grades = parseGradeInput(gradeInput.value)
+    const res = await apiFetch('/api/invites/grade-policy', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allowed_grades }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(err.detail || '保存失败')
+      return
+    }
+    const data = await res.json()
+    gradePolicy.value = {
+      allowed_grades: Array.isArray(data.allowed_grades) ? data.allowed_grades : [],
+      effective_grades: Array.isArray(data.effective_grades) ? data.effective_grades : [],
+      source: data.source || 'default',
+      updated_by: data.updated_by || '',
+      updated_at: data.updated_at || '',
+    }
+    syncGradeInput()
+    alert('注册年级策略已保存')
+  } finally {
+    gradePolicySaving.value = false
   }
 }
 
@@ -207,6 +281,41 @@ onMounted(fetchInvites)
           <button class="px-4 py-2 bg-teal-600 text-white rounded-lg" :disabled="creating" @click="createInvite">
             {{ creating ? '创建中...' : '创建邀请码' }}
           </button>
+        </div>
+      </div>
+
+      <div class="mb-8 p-5 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">学生注册年级策略</h2>
+          <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500">
+            {{ gradePolicy.source === 'policy' ? 'policy' : 'default' }}
+          </span>
+        </div>
+
+        <div v-if="gradePolicyLoading" class="text-sm text-gray-400">加载策略中...</div>
+        <div v-else class="space-y-4">
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">白名单年级（逗号分隔，留空表示使用默认范围）</label>
+            <input
+              v-model="gradeInput"
+              class="w-full p-2 bg-gray-50 dark:bg-gray-800 rounded"
+              placeholder="2027, 2026, 2025, 2024"
+            >
+          </div>
+
+          <div class="text-xs text-gray-500">
+            生效年级：{{ gradePolicy.effective_grades.join(', ') || '无' }}
+          </div>
+          <div class="text-xs text-gray-400">
+            上次更新：{{ gradePolicy.updated_at ? new Date(gradePolicy.updated_at).toLocaleString() : '未更新' }}
+            <span v-if="gradePolicy.updated_by"> · {{ gradePolicy.updated_by }}</span>
+          </div>
+
+          <div class="flex justify-end">
+            <button class="px-4 py-2 bg-teal-600 text-white rounded-lg" :disabled="gradePolicySaving" @click="saveGradePolicy">
+              {{ gradePolicySaving ? '保存中...' : '保存年级策略' }}
+            </button>
+          </div>
         </div>
       </div>
 

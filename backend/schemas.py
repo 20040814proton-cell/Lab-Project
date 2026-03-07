@@ -19,6 +19,7 @@ class StudentOut(StudentCreate):
     major: Optional[str] = None
     interests: List[str] = []
     bio: Optional[str] = None
+    public_email: Optional[str] = None
 
 class UserUpdate(BaseModel):
     avatar: Optional[str] = None
@@ -68,6 +69,52 @@ class PublicUserOut(BaseModel):
     major: Optional[str] = None
     interests: List[str] = []
     research_areas: List[str] = []
+    public_email: Optional[str] = None
+
+class ContributionCountsOut(BaseModel):
+    forum_posts: int = 0
+    forum_comments: int = 0
+    activities: int = 0
+    projects: int = 0
+    software: int = 0
+
+class ForumPostSummaryOut(BaseModel):
+    id: PydanticObjectId
+    title: str
+    created_at: datetime
+
+class ForumCommentSummaryOut(BaseModel):
+    id: PydanticObjectId
+    post_id: str
+    post_title: str
+    created_at: datetime
+    content_preview: str
+
+class ActivitySummaryOut(BaseModel):
+    id: PydanticObjectId
+    title: str
+    date: str
+    type: str
+
+class ProjectSummaryOut(BaseModel):
+    id: PydanticObjectId
+    title: str
+    status: str
+    created_at: datetime
+
+class SoftwareSummaryOut(BaseModel):
+    id: PydanticObjectId
+    name: str
+    version: str
+    upload_date: datetime
+
+class UserContributionsOut(BaseModel):
+    counts: ContributionCountsOut
+    recent_forum_posts: List[ForumPostSummaryOut] = []
+    recent_forum_comments: List[ForumCommentSummaryOut] = []
+    recent_activities: List[ActivitySummaryOut] = []
+    recent_projects: List[ProjectSummaryOut] = []
+    recent_software: List[SoftwareSummaryOut] = []
 
 class PostCreate(BaseModel):
     title: str
@@ -114,6 +161,8 @@ class ActivityCreate(BaseModel):
 
 class ActivityOut(ActivityCreate):
     id: PydanticObjectId
+    created_by_id: Optional[str] = None
+    created_by_username: Optional[str] = None
     created_at: datetime
 
 class LifeItemOut(LifeItemCreate):
@@ -143,6 +192,8 @@ class ProjectCreate(BaseModel):
 
 class ProjectOut(ProjectCreate):
     id: PydanticObjectId
+    created_by_id: Optional[str] = None
+    created_by_username: Optional[str] = None
     created_at: datetime
 
 class ProjectUpdate(BaseModel):
@@ -178,7 +229,18 @@ class SoftwareCreate(BaseModel):
 class SoftwareOut(SoftwareCreate):
     id: PydanticObjectId
     download_count: int
+    created_by_id: Optional[str] = None
+    created_by_username: Optional[str] = None
     upload_date: datetime
+
+class SoftwareUpdate(BaseModel):
+    name: Optional[str] = None
+    version: Optional[str] = None
+    category: Optional[str] = None
+    size: Optional[str] = None
+    description: Optional[str] = None
+    download_url: Optional[str] = None
+    cover_image: Optional[str] = None
 
 class InviteCreate(BaseModel):
     role: str
@@ -193,6 +255,20 @@ class InviteOut(InviteCreate):
     created_by: Optional[str] = None
     created_at: datetime
     is_active: bool
+
+class GradeOptionsOut(BaseModel):
+    grades: List[int] = []
+    source: str
+
+class GradePolicyUpdate(BaseModel):
+    allowed_grades: List[int] = []
+
+class GradePolicyOut(BaseModel):
+    allowed_grades: List[int] = []
+    effective_grades: List[int] = []
+    source: str
+    updated_by: Optional[str] = None
+    updated_at: Optional[datetime] = None
 
 class ForumPostCreate(BaseModel):
     title: str
@@ -210,6 +286,7 @@ class ForumPostOut(ForumPostCreate):
     id: PydanticObjectId
     author_id: str
     author_name: Optional[str] = None
+    author_display_name: Optional[str] = None
     created_at: datetime
     is_pinned: bool
     is_featured: bool
@@ -225,6 +302,7 @@ class ForumCommentOut(ForumCommentCreate):
     post_id: str
     author_id: str
     author_name: Optional[str] = None
+    author_display_name: Optional[str] = None
     created_at: datetime
 
 class ForumUserCommentOut(BaseModel):
@@ -233,5 +311,6 @@ class ForumUserCommentOut(BaseModel):
     post_title: str
     author_id: str
     author_name: Optional[str] = None
+    author_display_name: Optional[str] = None
     content: str
     created_at: datetime

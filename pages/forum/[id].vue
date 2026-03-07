@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import ForumCommentEditor from '~/components/forum/ForumCommentEditor.vue'
 import ForumPostEditorModal from '~/components/forum/ForumPostEditorModal.vue'
 import { apiFetch } from '~/logics/api'
+import { isDark } from '~/logics'
 import { goBackOr } from '~/logics/navigation'
 import { useUserStore } from '~/stores/user'
 
@@ -32,14 +33,51 @@ const moderating = ref(false)
 const mobileTocOpen = ref(false)
 const editorId = 'forum-preview'
 const scrollElement = typeof document !== 'undefined' ? document.documentElement : undefined
+const mdTheme = computed(() => (isDark.value ? 'dark' : 'light'))
 
 const isLoggedIn = computed(() => userStore.isTokenValid())
 const isAuthor = computed(() => {
   const username = userStore.userInfo?.username
-  return Boolean(username && post.value?.author_name === username)
+  return Boolean(username && (post.value?.author_name === username || String(post.value?.author_id || '') === username))
 })
 const canModerate = computed(() => userStore.hasRole('teacher', 'superadmin'))
 const canEditPost = computed(() => isAuthor.value || canModerate.value)
+
+function normalizeAuthorText(value: unknown) {
+  if (typeof value !== 'string')
+    return ''
+  return value.trim()
+}
+
+function isOpaqueAuthor(value: string) {
+  if (!value)
+    return true
+  const isMongoObjectId = /^[a-f0-9]{24}$/i.test(value)
+  const isUuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value)
+  const isLongDigits = /^\d{6,}$/.test(value)
+  return isMongoObjectId || isUuid || isLongDigits
+}
+
+const displayAuthor = (item: any) => {
+  const username = normalizeAuthorText(item?.author_name)
+  const displayName = normalizeAuthorText(item?.author_display_name)
+  const authorId = normalizeAuthorText(item?.author_id)
+
+  if (displayName && !isOpaqueAuthor(displayName))
+    return displayName
+  if (username)
+    return username
+  if (displayName)
+    return displayName
+  if (authorId && !isOpaqueAuthor(authorId))
+    return authorId
+  return 'Unknown user'
+}
+
+const authorUsername = (item: any) => {
+  const username = normalizeAuthorText(item?.author_name)
+  return username && !isOpaqueAuthor(username) ? username : ''
+}
 
 const editInitialData = computed(() => {
   if (!post.value)
@@ -53,7 +91,7 @@ const editInitialData = computed(() => {
 
 const canDeleteComment = (comment: any) => {
   const username = userStore.userInfo?.username
-  return Boolean((username && comment.author_name === username) || canModerate.value)
+  return Boolean((username && (comment.author_name === username || String(comment.author_id || '') === username)) || canModerate.value)
 }
 
 const renderComment = (content: string) => md.render(content || '')
@@ -262,7 +300,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="min-h-screen pt-24 px-6 pb-20 max-w-4xl mx-auto">
+  <div class="reader-page forum-detail-page min-h-screen pt-24 px-6 pb-20 max-w-4xl mx-auto">
     <div v-if="loading" class="py-20 text-center text-gray-400">
       <div class="i-carbon-circle-dash animate-spin text-3xl mb-2 mx-auto" />
       加载中...
@@ -274,30 +312,34 @@ onMounted(async () => {
     </div>
 
     <div v-else-if="post">
-      <button class="mb-4 text-sm text-gray-500 hover:text-teal-600 transition flex items-center gap-1.5" @click="goBack">
+      <button class="reader-back-button mb-4 text-sm transition flex items-center gap-1.5" @click="goBack">
         <span class="i-carbon-arrow-left" />
         返回上一个页面
       </button>
 
-      <header class="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/70 backdrop-blur px-5 py-6 md:px-7 mb-6">
-        <div class="text-xs text-gray-400 mb-2 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+      <header class="reader-surface reader-surface--primary rounded-2xl px-5 py-6 md:px-7 mb-6 reader-motion-enter">
+        <div class="reader-meta text-xs mb-2 flex flex-wrap items-center gap-x-1.5 gap-y-1">
           <span>{{ new Date(post.created_at).toLocaleDateString('zh-CN') }}</span>
-          <span v-if="post.author_name">·</span>
+          <span>·</span>
           <RouterLink
-            v-if="post.author_name"
+            v-if="authorUsername(post)"
             class="text-teal-600 hover:underline"
-            :to="`/u/${post.author_name}`"
+            :to="`/u/${encodeURIComponent(authorUsername(post))}`"
           >
-            {{ post.author_name }}
+            <span>{{ displayAuthor(post) }}</span>
+            <span v-if="displayAuthor(post) !== authorUsername(post)" class="ml-1 text-gray-400">
+              @{{ authorUsername(post) }}
+            </span>
           </RouterLink>
-          <span v-if="post.is_pinned" class="px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">置顶</span>
-          <span v-if="post.is_featured" class="px-2 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">加精</span>
+          <span v-else>{{ displayAuthor(post) }}</span>
+          <span v-if="post.is_pinned" class="px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30">置顶</span>
+          <span v-if="post.is_featured" class="px-2 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 dark:bg-teal-500/15 dark:text-teal-300 dark:border-teal-500/30">加精</span>
         </div>
 
-        <h1 class="text-2xl md:text-3xl font-bold leading-tight mb-3">{{ post.title }}</h1>
+        <h1 class="reader-title text-2xl md:text-3xl font-bold leading-tight mb-3">{{ post.title }}</h1>
 
         <div v-if="post.tags?.length" class="mb-4 flex flex-wrap gap-2">
-          <span v-for="t in post.tags" :key="t" class="text-xs px-2 py-0.5 rounded bg-teal-50 text-teal-600">{{ t }}</span>
+          <span v-for="t in post.tags" :key="t" class="text-xs px-2 py-0.5 rounded bg-teal-50 text-teal-600 dark:bg-teal-500/12 dark:text-teal-300">{{ t }}</span>
         </div>
 
         <div class="flex flex-wrap gap-2">
@@ -324,51 +366,55 @@ onMounted(async () => {
           <span>目录</span>
           <span :class="mobileTocOpen ? 'i-carbon-chevron-up' : 'i-carbon-chevron-down'" />
         </button>
-        <div v-if="mobileTocOpen" class="mt-2 bg-white/90 dark:bg-gray-900/80 rounded-xl p-3 border border-gray-100 dark:border-gray-800">
-          <MdCatalog :editor-id="editorId" :scroll-element="scrollElement" />
+        <div v-if="mobileTocOpen" class="reader-panel reader-toc mt-2 rounded-xl p-3">
+          <MdCatalog :editor-id="editorId" :scroll-element="scrollElement" :theme="mdTheme" />
         </div>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-[1fr_250px] gap-6 items-start mt-4">
-        <div class="bg-white/70 dark:bg-gray-900/70 rounded-xl p-5 border border-gray-100 dark:border-gray-800">
-          <MdPreview :editor-id="editorId" :model-value="post.content" />
+      <div class="grid grid-cols-1 lg:grid-cols-[1fr_250px] gap-6 items-start mt-4 reader-motion-enter reader-motion-enter--delay-1">
+        <div class="reader-surface reader-surface--primary rounded-xl p-5">
+          <MdPreview :editor-id="editorId" :model-value="post.content" :theme="mdTheme" class="reader-md" />
         </div>
         <aside class="hidden lg:block sticky top-24">
-          <div class="bg-white/90 dark:bg-gray-900/80 rounded-xl p-4 border border-gray-100 dark:border-gray-800">
+          <div class="reader-panel reader-toc rounded-xl p-4">
             <div class="text-sm font-semibold mb-2">目录</div>
-            <MdCatalog :editor-id="editorId" :scroll-element="scrollElement" />
+            <MdCatalog :editor-id="editorId" :scroll-element="scrollElement" :theme="mdTheme" />
           </div>
         </aside>
       </div>
 
-      <div class="mt-10">
+      <div class="mt-10 reader-motion-enter reader-motion-enter--delay-2">
         <h3 class="text-lg font-bold mb-4">评论</h3>
 
         <div class="space-y-4">
-          <div v-for="comment in comments" :key="comment.id" class="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <div v-for="comment in comments" :key="comment.id" class="reader-panel forum-comment-card p-4 rounded-xl">
             <div class="flex items-start justify-between gap-4">
               <div class="min-w-0 flex-1">
                 <div class="text-xs text-gray-400 mb-1 flex items-center gap-1.5">
                   <span>{{ new Date(comment.created_at).toLocaleString('zh-CN') }}</span>
-                  <span v-if="comment.author_name">·</span>
+                  <span>·</span>
                   <RouterLink
-                    v-if="comment.author_name"
+                    v-if="authorUsername(comment)"
                     class="text-teal-600 hover:underline"
-                    :to="`/u/${comment.author_name}`"
+                    :to="`/u/${encodeURIComponent(authorUsername(comment))}`"
                   >
-                    {{ comment.author_name }}
+                    <span>{{ displayAuthor(comment) }}</span>
+                    <span v-if="displayAuthor(comment) !== authorUsername(comment)" class="ml-1 text-gray-400">
+                      @{{ authorUsername(comment) }}
+                    </span>
                   </RouterLink>
+                  <span v-else>{{ displayAuthor(comment) }}</span>
                 </div>
                 <div class="relative">
                   <div
                     :id="`comment-content-${comment.id}`"
-                    class="prose prose-sm dark:prose-invert max-w-none transition-all"
+                    class="reader-comment-body prose prose-sm dark:prose-invert max-w-none transition-all"
                     :class="!isCommentExpanded(comment.id) && isLongComment(comment.content) ? 'max-h-36 overflow-hidden' : ''"
                     v-html="renderComment(comment.content)"
                   />
                   <div
                     v-if="!isCommentExpanded(comment.id) && isLongComment(comment.content)"
-                    class="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white dark:from-gray-900 to-transparent"
+                    class="reader-fade-mask pointer-events-none absolute inset-x-0 bottom-0 h-12"
                   />
                 </div>
                 <button
@@ -408,7 +454,7 @@ onMounted(async () => {
             @submit="submitComment"
           />
         </div>
-        <div v-else class="mt-6 p-4 rounded-xl border border-teal-200 bg-teal-50 text-sm text-teal-700">
+        <div v-else class="mt-6 p-4 rounded-xl border border-teal-200 bg-teal-50 text-sm text-teal-700 dark:border-teal-500/30 dark:bg-teal-500/10 dark:text-teal-200">
           登录后可参与评论
           <button class="ml-3 underline" @click="router.push('/login')">前往登录</button>
         </div>

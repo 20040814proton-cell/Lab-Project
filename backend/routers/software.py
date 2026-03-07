@@ -1,49 +1,61 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
 from beanie import PydanticObjectId
 from models import Software, UserRole
 from routers.auth import get_current_user
-from schemas import SoftwareCreate, SoftwareOut
+from schemas import SoftwareCreate, SoftwareOut, SoftwareUpdate
 
 router = APIRouter()
 
+def is_manager(current_user: dict) -> bool:
+    return current_user.get("role") in [UserRole.TEACHER, UserRole.SUPERADMIN]
+
+def is_owner(current_user: dict, software: Software) -> bool:
+    owner_id = getattr(software, "created_by_id", None)
+    return bool(owner_id) and str(owner_id) == str(current_user.get("id"))
+
+def can_manage(current_user: dict, software: Software) -> bool:
+    return is_manager(current_user) or is_owner(current_user, software)
+
 @router.get("/", response_model=List[SoftwareOut])
-async def get_software():
+async def get_software(creator: Optional[str] = Query(None)):
+    if creator:
+        return await Software.find({"created_by_username": creator}).sort("-upload_date").to_list()
     return await Software.find_all().sort("-upload_date").to_list()
 
 @router.post("/", response_model=SoftwareOut)
 async def create_software(payload: SoftwareCreate, current_user: dict = Depends(get_current_user)):
-    # DEBUG LOG
-    print(f"DEBUG: create_software called with payload: {payload}")
-    print(f"DEBUG: Software model class is: {Software}")
-
-    role = current_user.get('role')
-    # Permission check for Faculty
-    allowed = [UserRole.TEACHER.value, UserRole.SUPERADMIN.value, "admin", "professor"]
-    
-    # Check if role is allowed (case insensitive)
-    if not role or str(role).lower() not in allowed:
-        print(f"DEBUG: Permission denied for role: {role}")
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    # Create document
-    # Ensure we are using the model class 'Software'
-    new_software = Software(**payload.dict())
+    new_software = Software(
+        **payload.dict(),
+        created_by_id=str(current_user["id"]),
+        created_by_username=current_user.get("username"),
+    )
     await new_software.insert()
     return new_software
 
-@router.delete("/{id}")
-async def delete_software(id: PydanticObjectId, current_user: dict = Depends(get_current_user)):
-    role = current_user.get('role')
-    allowed = [UserRole.TEACHER.value, UserRole.SUPERADMIN.value, "admin", "professor"]
-    
-    if not role or str(role).lower() not in allowed:
-         raise HTTPException(status_code=403, detail="Permission denied")
-         
+@router.put("/{id}", response_model=SoftwareOut)
+async def update_software(id: PydanticObjectId, payload: SoftwareUpdate, current_user: dict = Depends(get_current_user)):
     sw = await Software.get(id)
     if not sw:
         raise HTTPException(status_code=404, detail="Software not found")
-        
+
+    if not can_manage(current_user, sw):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    update_data = payload.dict(exclude_unset=True)
+    if update_data:
+        await sw.set(update_data)
+    return sw
+
+@router.delete("/{id}")
+async def delete_software(id: PydanticObjectId, current_user: dict = Depends(get_current_user)):
+    sw = await Software.get(id)
+    if not sw:
+        raise HTTPException(status_code=404, detail="Software not found")
+
+    if not can_manage(current_user, sw):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
     await sw.delete()
     return {"status": "deleted"}
 
@@ -52,7 +64,7 @@ async def download_software(id: PydanticObjectId):
     sw = await Software.get(id)
     if not sw:
         raise HTTPException(status_code=404, detail="Software not found")
-    
+
     sw.download_count += 1
     await sw.save()
     return {"status": "counted"}

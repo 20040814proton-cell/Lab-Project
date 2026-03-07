@@ -4,6 +4,8 @@ from typing import Optional
 from datetime import datetime
 from models import Student, Teacher, SuperAdmin, InviteCode, UserRole
 from routers.auth import get_password_hash
+from routers._grade_policy import get_effective_grades
+from schemas import GradeOptionsOut
 
 router = APIRouter()
 
@@ -14,6 +16,11 @@ class RegisterRequest(BaseModel):
     grade: Optional[int] = None # Required for student
     invite_code: Optional[str] = None # Required for all roles
     username: Optional[str] = None # Optional for teacher (if they want custom), auto-generated for student
+
+@router.get("/register/grade-options", response_model=GradeOptionsOut)
+async def get_register_grade_options():
+    grades, source = await get_effective_grades()
+    return GradeOptionsOut(grades=grades, source=source)
 
 @router.post("/register")
 async def register(req: RegisterRequest):
@@ -37,6 +44,13 @@ async def register(req: RegisterRequest):
     if role == UserRole.STUDENT:
         if not req.grade:
             raise HTTPException(status_code=400, detail="Student must provide grade (e.g. 2025)")
+
+        allowed_grades, _ = await get_effective_grades()
+        if req.grade not in allowed_grades:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Grade {req.grade} is not allowed. Allowed grades: {', '.join(str(g) for g in allowed_grades)}",
+            )
         
         # Smart ID Generation
         # Find latest student in this grade

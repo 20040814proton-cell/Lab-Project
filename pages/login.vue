@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '~/stores/user'
 import { apiFetch } from '~/logics/api'
@@ -10,17 +10,29 @@ const userStore = useUserStore()
 const username = ref('')
 const password = ref('')
 const role = ref('student') // 'student' | 'teacher' | 'superadmin'
+const showPassword = ref(false)
 const loading = ref(false)
 const showError = ref(false)
 const errorMessage = ref('')
 
-const handleLogin = async () => {
+const roleTitle = computed(() => {
+  if (role.value === 'teacher')
+    return '教师登录'
+  if (role.value === 'superadmin')
+    return '超级管理员登录'
+  return '学生登录'
+})
+
+async function handleLogin() {
   if (!username.value || !password.value) {
     showToast('请输入账号和密码')
     return
   }
 
   loading.value = true
+  showError.value = false
+  errorMessage.value = ''
+
   try {
     const res = await apiFetch('/api/token', {
       method: 'POST',
@@ -40,15 +52,15 @@ const handleLogin = async () => {
         user_role: data.user_role || data.role,
       })
       router.push('/dashboard')
+      return
     }
-    else {
-      const err = await res.json()
-      showToast(err.detail || '登录失败')
-    }
+
+    const err = await res.json().catch(() => ({}))
+    showToast(err.detail || '登录失败')
   }
-  catch (e) {
+  catch (error) {
+    console.error(error)
     showToast('网络错误，请稍后重试')
-    console.error(e)
   }
   finally {
     loading.value = false
@@ -65,110 +77,89 @@ function showToast(msg: string) {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#F5F5F7] dark:bg-[#121212]">
-    <!-- Background Texture -->
-    <div class="absolute inset-0 opacity-5 pointer-events-none z-0" style="background-image: url('/noise.png');" />
-    <div class="absolute top-0 right-0 w-[50vw] h-[50vh] bg-gradient-to-b from-teal-500/10 to-transparent blur-3xl pointer-events-none" />
+  <div class="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#F5F5F7] px-4 py-10 dark:bg-[#121212]">
+    <div class="absolute inset-0 z-0 opacity-5 pointer-events-none" style="background-image: url('/noise.png');" />
+    <div class="absolute top-0 right-0 h-[45vh] w-[45vw] bg-gradient-to-b from-teal-500/10 to-transparent blur-3xl pointer-events-none" />
 
-    <!-- Login Card -->
-    <div class="relative z-10 w-full max-w-md p-8 md:p-12 bg-white/80 dark:bg-black/60 backdrop-blur-xl rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-800/50">
-      <!-- Title -->
-      <div class="text-center mb-10">
-        <h1 class="text-5xl font-serif font-bold mb-2 tracking-widest text-gray-900 dark:text-gray-100">
-          墨 枢
-        </h1>
-        <div class="text-xs uppercase tracking-[0.4em] opacity-60 font-sans">
-          Laboratory System
-        </div>
+    <div class="relative z-10 w-full max-w-md rounded-2xl border border-gray-200/50 bg-white/85 p-8 shadow-xl backdrop-blur-xl dark:border-gray-800/60 dark:bg-black/60 md:p-10">
+      <div class="mb-8 text-center">
+        <h1 class="mb-2 text-4xl font-serif font-bold tracking-[0.2em] text-gray-900 dark:text-gray-100">实验室</h1>
+        <p class="text-xs uppercase tracking-[0.35em] text-gray-400">Laboratory System</p>
       </div>
 
-      <!-- Role Switcher -->
-      <div class="flex p-1 mb-8 bg-gray-100 dark:bg-gray-800/50 rounded-lg">
+      <div class="mb-2 text-sm font-medium text-gray-600 dark:text-gray-300">{{ roleTitle }}</div>
+
+      <div class="mb-6 grid grid-cols-3 rounded-lg bg-gray-100 p-1 dark:bg-gray-800/50">
         <button
-          class="flex-1 py-2 text-sm font-medium rounded-md transition-all duration-300"
-          :class="role === 'student' ? 'bg-white dark:bg-gray-700 shadow-sm text-teal-600 dark:text-teal-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
+          class="rounded-md py-2 text-sm font-medium transition"
+          :class="role === 'student' ? 'bg-white text-teal-600 shadow-sm dark:bg-gray-700 dark:text-teal-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
           @click="role = 'student'"
         >
-          登入学生
+          学生
         </button>
         <button
-          class="flex-1 py-2 text-sm font-medium rounded-md transition-all duration-300"
-          :class="role === 'teacher' ? 'bg-white dark:bg-gray-700 shadow-sm text-teal-600 dark:text-teal-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
+          class="rounded-md py-2 text-sm font-medium transition"
+          :class="role === 'teacher' ? 'bg-white text-teal-600 shadow-sm dark:bg-gray-700 dark:text-teal-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
           @click="role = 'teacher'"
         >
-          登入教师
+          教师
         </button>
         <button
-          class="flex-1 py-2 text-sm font-medium rounded-md transition-all duration-300"
-          :class="role === 'superadmin' ? 'bg-white dark:bg-gray-700 shadow-sm text-teal-600 dark:text-teal-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
+          class="rounded-md py-2 text-sm font-medium transition"
+          :class="role === 'superadmin' ? 'bg-white text-teal-600 shadow-sm dark:bg-gray-700 dark:text-teal-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
           @click="role = 'superadmin'"
         >
-          超级账号
+          超管
         </button>
       </div>
 
-      <!-- Form -->
-      <div class="space-y-6">
-        <div class="relative group">
+      <div v-if="showError" class="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+        {{ errorMessage }}
+      </div>
+
+      <div class="space-y-5">
+        <div class="relative">
           <input
             v-model="username"
             type="text"
-            placeholder="账号 / ID"
-            class="w-full px-4 py-3 bg-transparent border-b border-gray-300 dark:border-gray-700 focus:border-teal-500 dark:focus:border-teal-400 outline-none transition-colors placeholder:text-gray-400"
+            placeholder="账号 / Username"
+            class="w-full border-b border-gray-300 bg-transparent px-3 py-2 pr-9 outline-none transition-colors placeholder:text-gray-400 focus:border-teal-500 dark:border-gray-700"
             @keyup.enter="handleLogin"
           >
-          <div class="absolute right-0 top-3 text-gray-400">
-            <div class="i-carbon-user text-xl" />
-          </div>
+          <span class="i-carbon-user absolute right-1 top-2.5 text-xl text-gray-400" />
         </div>
 
-        <div class="relative group">
+        <div class="relative">
           <input
             v-model="password"
-            type="password"
+            :type="showPassword ? 'text' : 'password'"
             placeholder="密码"
-            class="w-full px-4 py-3 bg-transparent border-b border-gray-300 dark:border-gray-700 focus:border-teal-500 dark:focus:border-teal-400 outline-none transition-colors placeholder:text-gray-400"
+            class="w-full border-b border-gray-300 bg-transparent px-3 py-2 pr-20 outline-none transition-colors placeholder:text-gray-400 focus:border-teal-500 dark:border-gray-700"
             @keyup.enter="handleLogin"
           >
-          <div class="absolute right-0 top-3 text-gray-400">
-            <div class="i-carbon-password text-xl" />
-          </div>
+          <button
+            type="button"
+            class="absolute right-1 top-2 text-xs text-gray-500 hover:text-teal-600"
+            @click="showPassword = !showPassword"
+          >
+            {{ showPassword ? '隐藏' : '显示' }}
+          </button>
         </div>
 
         <button
-          class="w-full py-3 mt-4 bg-teal-600 hover:bg-teal-700 text-white rounded-lg shadow-lg shadow-teal-500/30 transition-all duration-300 font-medium tracking-wide disabled:opacity-70 disabled:cursor-not-allowed"
+          class="mt-2 w-full rounded-lg bg-teal-600 py-3 font-medium tracking-wide text-white shadow-lg shadow-teal-500/30 transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-70"
           :disabled="loading"
           @click="handleLogin"
         >
-          <span v-if="loading" class="i-carbon-circle-dash animate-spin mr-2" />
-          {{ loading ? '验证中...' : '立即入境' }}
+          <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
+          {{ loading ? '登录中...' : '立即登录' }}
         </button>
       </div>
 
-      <!-- Footer -->
-      <div class="mt-8 text-center text-xs text-gray-400">
-        <span class="hover:text-teal-600 cursor-pointer transition" @click="router.push('/register')">申请入驻</span>
-        <span class="mx-2">|</span>
-        <span class="hover:text-teal-600 cursor-pointer transition">忘记密码?</span>
+      <div class="mt-6 text-center text-xs text-gray-500">
+        还没有账号？
+        <span class="cursor-pointer text-teal-600 hover:underline" @click="router.push('/register')">申请入驻</span>
       </div>
     </div>
-
-    <!-- Toast Notification -->
-    <Transition
-      enter-active-class="transition duration-300 ease-out"
-      enter-from-class="transform translate-y-10 opacity-0"
-      enter-to-class="transform translate-y-0 opacity-100"
-      leave-active-class="transition duration-200 ease-in"
-      leave-from-class="transform translate-y-0 opacity-100"
-      leave-to-class="transform translate-y-10 opacity-0"
-    >
-      <div
-        v-if="showError"
-        class="fixed bottom-10 px-6 py-3 bg-red-500/90 backdrop-blur text-white rounded-full shadow-lg text-sm flex items-center gap-2 z-50"
-      >
-        <span class="i-carbon-warning-filled" />
-        {{ errorMessage }}
-      </div>
-    </Transition>
   </div>
 </template>

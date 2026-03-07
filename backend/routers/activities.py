@@ -1,14 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Dict
+from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import List, Optional
 from models import Activity, UserRole
 from schemas import ActivityCreate, ActivityOut, ActivityUpdate
 from routers.auth import get_current_user
-from beanie import PydanticObjectId, operators
+from beanie import PydanticObjectId
 
 router = APIRouter()
 
+def is_manager(current_user: dict) -> bool:
+    return current_user.get("role") in [UserRole.TEACHER, UserRole.SUPERADMIN]
+
+def is_owner(current_user: dict, activity: Activity) -> bool:
+    owner_id = getattr(activity, "created_by_id", None)
+    return bool(owner_id) and str(owner_id) == str(current_user.get("id"))
+
+def can_manage(current_user: dict, activity: Activity) -> bool:
+    return is_manager(current_user) or is_owner(current_user, activity)
+
 @router.get("/", response_model=List[ActivityOut])
-async def get_activities():
+async def get_activities(creator: Optional[str] = Query(None)):
+    if creator:
+        return await Activity.find({"created_by_username": creator}).sort("-date").to_list()
     return await Activity.find_all().sort("-date").to_list()
 
 @router.get("/stats")
@@ -33,33 +45,34 @@ async def get_activity(id: PydanticObjectId):
 
 @router.post("/", response_model=ActivityOut)
 async def create_activity(activity: ActivityCreate, current_user: dict = Depends(get_current_user)):
-    if current_user['role'] not in [UserRole.TEACHER, UserRole.SUPERADMIN]:
-        raise HTTPException(status_code=403, detail="Only teachers can create activities")
-    
-    new_activity = Activity(**activity.dict())
+    new_activity = Activity(
+        **activity.dict(),
+        created_by_id=str(current_user["id"]),
+        created_by_username=current_user.get("username"),
+    )
     await new_activity.insert()
     return new_activity
 
 @router.put("/{id}", response_model=ActivityOut)
 async def update_activity(id: PydanticObjectId, req: ActivityUpdate, current_user: dict = Depends(get_current_user)):
-    if current_user['role'] not in [UserRole.TEACHER, UserRole.SUPERADMIN]:
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
     act = await Activity.get(id)
     if not act:
         raise HTTPException(status_code=404, detail="Activity not found")
+
+    if not can_manage(current_user, act):
+        raise HTTPException(status_code=403, detail="Permission denied")
         
     await act.set(req.dict(exclude_unset=True))
     return act
 
 @router.delete("/{id}")
 async def delete_activity(id: PydanticObjectId, current_user: dict = Depends(get_current_user)):
-    if current_user['role'] not in [UserRole.TEACHER, UserRole.SUPERADMIN]:
-        raise HTTPException(status_code=403, detail="Permission denied")
-        
     act = await Activity.get(id)
     if not act:
         raise HTTPException(status_code=404, detail="Activity not found")
+
+    if not can_manage(current_user, act):
+        raise HTTPException(status_code=403, detail="Permission denied")
         
     await act.delete()
     return {"status": "deleted"}

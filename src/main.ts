@@ -21,6 +21,7 @@ import 'shiki-magic-move/style.css'
 import './styles/main.css'
 import './styles/prose.css'
 import './styles/markdown.css'
+import './styles/reader-dark.css'
 import 'uno.css'
 
 export const createApp = ViteSSG(

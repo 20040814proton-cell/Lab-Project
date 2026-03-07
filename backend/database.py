@@ -13,6 +13,7 @@ from models import (
     Project,
     Software,
     InviteCode,
+    RegistrationGradePolicy,
     ForumPost,
     ForumComment,
 )
@@ -45,6 +46,7 @@ async def init_db():
             Project,
             Software,
             InviteCode,
+            RegistrationGradePolicy,
             ForumPost,
             ForumComment,
         ],

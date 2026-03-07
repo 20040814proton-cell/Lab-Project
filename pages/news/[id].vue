@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 import { useRoute, useRouter } from 'vue-router'
 import { apiFetch } from '~/logics/api'
+import { isDark } from '~/logics'
 import { goBackOr } from '~/logics/navigation'
 
 interface AdjacentPostItem {
@@ -24,6 +25,7 @@ const loading = ref(true)
 const post = ref<any>(null)
 const adjacent = ref<AdjacentPostPayload>({ previous: null, next: null })
 const loadError = ref('')
+const mdTheme = computed(() => (isDark.value ? 'dark' : 'light'))
 
 function goBack() {
   goBackOr(router, '/news')
@@ -76,8 +78,8 @@ onMounted(fetchPost)
 </script>
 
 <template>
-  <div class="min-h-screen pt-24 px-6 pb-20 max-w-4xl mx-auto">
-    <button class="mb-4 text-sm text-gray-500 hover:text-teal-600 transition flex items-center gap-1.5" @click="goBack">
+  <div class="reader-page news-detail-page min-h-screen pt-24 px-6 pb-20 max-w-4xl mx-auto">
+    <button class="reader-back-button mb-4 text-sm transition flex items-center gap-1.5" @click="goBack">
       <span class="i-carbon-arrow-left" />
       返回上一个页面
     </button>
@@ -92,38 +94,42 @@ onMounted(fetchPost)
       <RouterLink to="/news" class="text-teal-600 hover:underline">返回动态列表</RouterLink>
     </div>
 
-    <div v-else-if="post">
-      <div class="text-xs text-gray-400 mb-3">{{ new Date(post.date).toLocaleDateString('zh-CN') }}</div>
-      <h1 class="text-3xl font-serif font-bold mb-6">{{ post.title }}</h1>
-      <div v-if="post.cover_image" class="mb-8 rounded-xl overflow-hidden">
-        <img :src="post.cover_image" class="w-full h-full object-cover" />
+    <div v-else-if="post" class="news-detail-shell">
+      <div class="reader-motion-enter">
+        <div class="reader-meta mb-3">{{ new Date(post.date).toLocaleDateString('zh-CN') }}</div>
+        <h1 class="reader-title text-3xl font-serif font-bold mb-6">{{ post.title }}</h1>
       </div>
-      <MdPreview :editor-id="'news-preview'" :model-value="post.content" />
+      <div v-if="post.cover_image" class="reader-cover reader-cover--media mb-8 rounded-xl overflow-hidden reader-motion-enter reader-motion-enter--delay-1">
+        <img :src="post.cover_image" class="reader-cover-media" />
+      </div>
+      <div class="reader-surface reader-surface--primary rounded-2xl p-5 md:p-7 reader-motion-enter reader-motion-enter--delay-1">
+        <MdPreview :editor-id="'news-preview'" :model-value="post.content" :theme="mdTheme" class="reader-md" />
+      </div>
 
-      <div class="mt-12 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="mt-12 grid grid-cols-1 md:grid-cols-2 gap-4 reader-motion-enter reader-motion-enter--delay-2">
         <RouterLink
           v-if="adjacent.previous"
           :to="`/news/${adjacent.previous.id}`"
-          class="block rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:border-teal-300 hover:shadow-sm transition"
+          class="reader-adjacent-card news-adjacent-card block rounded-xl p-4 transition"
         >
-          <div class="text-xs text-gray-400 mb-2">上一篇</div>
-          <div class="font-medium text-gray-900 dark:text-gray-100 line-clamp-2 mb-2">{{ adjacent.previous.title }}</div>
-          <div class="text-xs text-gray-400">{{ new Date(adjacent.previous.date).toLocaleDateString('zh-CN') }}</div>
+          <div class="reader-meta text-xs mb-2">上一篇</div>
+          <div class="reader-adjacent-title font-medium line-clamp-2 mb-2">{{ adjacent.previous.title }}</div>
+          <div class="reader-meta text-xs">{{ new Date(adjacent.previous.date).toLocaleDateString('zh-CN') }}</div>
         </RouterLink>
-        <div v-else class="rounded-xl border border-dashed border-gray-200 dark:border-gray-700 p-4 text-sm text-gray-400">
+        <div v-else class="reader-adjacent-empty rounded-xl p-4 text-sm">
           没有上一篇
         </div>
 
         <RouterLink
           v-if="adjacent.next"
           :to="`/news/${adjacent.next.id}`"
-          class="block rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:border-teal-300 hover:shadow-sm transition"
+          class="reader-adjacent-card news-adjacent-card block rounded-xl p-4 transition"
         >
-          <div class="text-xs text-gray-400 mb-2">下一篇</div>
-          <div class="font-medium text-gray-900 dark:text-gray-100 line-clamp-2 mb-2">{{ adjacent.next.title }}</div>
-          <div class="text-xs text-gray-400">{{ new Date(adjacent.next.date).toLocaleDateString('zh-CN') }}</div>
+          <div class="reader-meta text-xs mb-2">下一篇</div>
+          <div class="reader-adjacent-title font-medium line-clamp-2 mb-2">{{ adjacent.next.title }}</div>
+          <div class="reader-meta text-xs">{{ new Date(adjacent.next.date).toLocaleDateString('zh-CN') }}</div>
         </RouterLink>
-        <div v-else class="rounded-xl border border-dashed border-gray-200 dark:border-gray-700 p-4 text-sm text-gray-400">
+        <div v-else class="reader-adjacent-empty rounded-xl p-4 text-sm">
           没有下一篇
         </div>
       </div>

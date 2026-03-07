@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import ForumPostEditorModal from '~/components/forum/ForumPostEditorModal.vue'
 import { apiFetch } from '~/logics/api'
 import { buildSummaryFromMarkdown } from '~/logics/markdown-editor'
@@ -9,6 +9,7 @@ import { useUserStore } from '~/stores/user'
 type ForumMode = 'all' | 'my_posts' | 'my_comments'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 
 const loading = ref(false)
@@ -32,9 +33,47 @@ const canModerate = computed(() => userStore.hasRole('teacher', 'superadmin'))
 const isLoggedIn = computed(() => userStore.isTokenValid())
 const currentUsername = computed(() => userStore.userInfo?.username || '')
 const isCommentMode = computed(() => currentMode.value === 'my_comments')
+const creatorFilter = computed(() => typeof route.query.creator === 'string' ? route.query.creator.trim() : '')
+const skeletonRows = [1, 2, 3, 4]
 
 const summary = (markdown: string, max = 180) =>
   buildSummaryFromMarkdown(markdown || '', max) || '暂无内容摘要'
+
+function normalizeAuthorText(value: unknown) {
+  if (typeof value !== 'string')
+    return ''
+  return value.trim()
+}
+
+function isOpaqueAuthor(value: string) {
+  if (!value)
+    return true
+  const isMongoObjectId = /^[a-f0-9]{24}$/i.test(value)
+  const isUuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value)
+  const isLongDigits = /^\d{6,}$/.test(value)
+  return isMongoObjectId || isUuid || isLongDigits
+}
+
+const displayAuthor = (item: any) => {
+  const username = normalizeAuthorText(item?.author_name)
+  const displayName = normalizeAuthorText(item?.author_display_name)
+  const authorId = normalizeAuthorText(item?.author_id)
+
+  if (displayName && !isOpaqueAuthor(displayName))
+    return displayName
+  if (username)
+    return username
+  if (displayName)
+    return displayName
+  if (authorId && !isOpaqueAuthor(authorId))
+    return authorId
+  return 'Unknown user'
+}
+
+const authorUsername = (item: any) => {
+  const username = normalizeAuthorText(item?.author_name)
+  return username && !isOpaqueAuthor(username) ? username : ''
+}
 
 function ensureLogin(actionText: string) {
   if (isLoggedIn.value)
@@ -76,6 +115,8 @@ async function fetchData(reset = false) {
       params.set('q', query.value.trim())
     if (!isCommentMode.value && tag.value.trim())
       params.set('tag', tag.value.trim())
+    if (currentMode.value === 'all' && creatorFilter.value)
+      params.set('creator', creatorFilter.value)
 
     let url = `/api/forum?${params.toString()}`
     if (currentMode.value !== 'all') {
@@ -201,10 +242,15 @@ onMounted(async () => {
   await fetchTags()
   await fetchData(true)
 })
+
+watch(() => route.query.creator, () => {
+  if (currentMode.value === 'all')
+    fetchData(true)
+})
 </script>
 
 <template>
-  <div class="min-h-screen pt-24 px-6 pb-20 max-w-6xl mx-auto">
+  <div class="forum-page min-h-screen pt-24 px-6 pb-20 max-w-6xl mx-auto">
     <div class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-3xl font-serif font-bold">论坛</h1>
@@ -215,7 +261,7 @@ onMounted(async () => {
       </button>
     </div>
 
-    <div class="mb-6 flex flex-wrap gap-2">
+    <div class="mb-6 flex flex-wrap gap-2 forum-mode-tabs">
       <button
         class="text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700"
         :class="currentMode === 'all' ? 'bg-teal-50 text-teal-700 border-teal-200' : ''"
@@ -239,7 +285,7 @@ onMounted(async () => {
       </button>
     </div>
 
-    <div class="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+    <div class="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3 forum-search-panel">
       <input
         v-model="query"
         placeholder="搜索标题或内容"
@@ -286,18 +332,38 @@ onMounted(async () => {
       </button>
     </div>
 
+    <div
+      v-if="currentMode === 'all' && creatorFilter"
+      class="mb-6 p-3 rounded-lg border border-teal-200 bg-teal-50 text-sm text-teal-700 flex items-center justify-between"
+    >
+      <span>当前仅展示 @{{ creatorFilter }} 的帖子</span>
+      <RouterLink to="/forum" class="hover:underline">清除筛选</RouterLink>
+    </div>
+
     <div v-if="errorMessage" class="mb-6 p-3 rounded-lg border border-red-200 bg-red-50 text-sm text-red-600">
       {{ errorMessage }}
     </div>
 
-    <div v-if="loading && postList.length === 0 && commentList.length === 0" class="text-center py-20 text-gray-400">
-      <div class="i-carbon-circle-dash animate-spin text-3xl mb-2 mx-auto" />
-      加载中...
+    <div v-if="loading && postList.length === 0 && commentList.length === 0" class="space-y-4 mb-2">
+      <div
+        v-for="idx in skeletonRows"
+        :key="idx"
+        class="forum-skeleton-card rounded-xl border border-gray-200/70 dark:border-slate-700/70 p-4 md:p-5 animate-pulse"
+      >
+        <div class="h-3 w-40 rounded bg-gray-200/80 dark:bg-slate-700/80 mb-3" />
+        <div class="h-5 w-3/5 rounded bg-gray-200/90 dark:bg-slate-700/90 mb-3" />
+        <div class="h-3 w-full rounded bg-gray-200/70 dark:bg-slate-800/80 mb-2" />
+        <div class="h-3 w-4/5 rounded bg-gray-200/70 dark:bg-slate-800/80 mb-3" />
+        <div class="flex gap-2">
+          <div class="h-6 w-14 rounded bg-gray-200/80 dark:bg-slate-700/80" />
+          <div class="h-6 w-16 rounded bg-gray-200/80 dark:bg-slate-700/80" />
+        </div>
+      </div>
     </div>
 
-    <div v-else class="space-y-6">
+    <div v-else class="space-y-6 forum-list-shell">
       <template v-if="isCommentMode">
-        <div class="rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+        <div class="forum-list-card-wrap rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
           <div
             v-for="comment in commentList"
             :key="comment.id"
@@ -317,26 +383,30 @@ onMounted(async () => {
       </template>
 
       <template v-else>
-        <div class="rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+        <div class="forum-list-card-wrap rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
           <article
             v-for="post in postList"
             :key="post.id"
-            class="group px-4 py-4 md:px-5 md:py-5 hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition cursor-pointer"
+            class="forum-list-card group px-4 py-4 md:px-5 md:py-5 hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition cursor-pointer"
             @click="router.push(`/forum/${post.id}`)"
           >
             <div class="flex items-start justify-between gap-4">
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-400 mb-1.5">
                   <span>{{ new Date(post.created_at).toLocaleDateString('zh-CN') }}</span>
-                  <span v-if="post.author_name">·</span>
+                  <span>·</span>
                   <RouterLink
-                    v-if="post.author_name"
+                    v-if="authorUsername(post)"
                     class="text-teal-600 hover:underline"
-                    :to="`/u/${post.author_name}`"
+                    :to="`/u/${encodeURIComponent(authorUsername(post))}`"
                     @click.stop
                   >
-                    {{ post.author_name }}
+                    <span>{{ displayAuthor(post) }}</span>
+                    <span v-if="displayAuthor(post) !== authorUsername(post)" class="ml-1 text-gray-400">
+                      @{{ authorUsername(post) }}
+                    </span>
                   </RouterLink>
+                  <span v-else>{{ displayAuthor(post) }}</span>
                   <span v-if="post.is_pinned" class="px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">置顶</span>
                   <span v-if="post.is_featured" class="px-2 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">加精</span>
                 </div>

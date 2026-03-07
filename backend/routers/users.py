@@ -1,8 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Union
-from models import Student, Teacher, SuperAdmin, UserRole
-from schemas import StudentOut, TeacherOut, SuperAdminOut, UserUpdate, PublicUserOut
+from models import Student, Teacher, SuperAdmin, UserRole, ForumPost, ForumComment, Activity, Project, Software
+from schemas import (
+    StudentOut,
+    TeacherOut,
+    SuperAdminOut,
+    UserUpdate,
+    PublicUserOut,
+    UserContributionsOut,
+    ContributionCountsOut,
+    ForumPostSummaryOut,
+    ForumCommentSummaryOut,
+    ActivitySummaryOut,
+    ProjectSummaryOut,
+    SoftwareSummaryOut,
+)
 from routers.auth import get_current_user
+from beanie import PydanticObjectId
 
 router = APIRouter()
 
@@ -28,7 +42,14 @@ def as_public_user(user) -> PublicUserOut:
         major=getattr(user, 'major', None),
         interests=getattr(user, 'interests', []) or [],
         research_areas=getattr(user, 'research_areas', []) or [],
+        public_email=getattr(user, 'public_email', None),
     )
+
+def make_preview(text: str, max_len: int = 120) -> str:
+    normalized = ' '.join((text or '').split())
+    if len(normalized) <= max_len:
+        return normalized
+    return f"{normalized[:max_len]}..."
 
 @router.get("/", response_model=List[Union[TeacherOut, StudentOut, SuperAdminOut]])
 async def get_users(role: str = Query(None)):
@@ -107,3 +128,70 @@ async def read_user_public_profile(username: str):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return as_public_user(user)
+
+@router.get("/public/{username}/contributions", response_model=UserContributionsOut)
+async def read_user_contributions(username: str, limit: int = Query(5, ge=1, le=10)):
+    user = await find_user_by_username(username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user_id = str(user.id)
+    forum_query = {"$or": [{"author_id": user_id}, {"author_name": username}, {"author_id": username}]}
+
+    forum_post_total = await ForumPost.find(forum_query).count()
+    forum_comment_total = await ForumComment.find(forum_query).count()
+    activity_total = await Activity.find({"created_by_username": username}).count()
+    project_total = await Project.find({"created_by_username": username}).count()
+    software_total = await Software.find({"created_by_username": username}).count()
+
+    forum_posts = await ForumPost.find(forum_query).sort("-created_at").limit(limit).to_list()
+    forum_comments = await ForumComment.find(forum_query).sort("-created_at").limit(limit).to_list()
+    activities = await Activity.find({"created_by_username": username}).sort("-created_at").limit(limit).to_list()
+    projects = await Project.find({"created_by_username": username}).sort("-created_at").limit(limit).to_list()
+    software_items = await Software.find({"created_by_username": username}).sort("-upload_date").limit(limit).to_list()
+
+    post_ids = []
+    for comment in forum_comments:
+        try:
+            post_ids.append(PydanticObjectId(comment.post_id))
+        except Exception:
+            continue
+
+    posts = await ForumPost.find({"_id": {"$in": post_ids}}).to_list() if post_ids else []
+    post_title_map = {str(post.id): post.title for post in posts}
+
+    return UserContributionsOut(
+        counts=ContributionCountsOut(
+            forum_posts=forum_post_total,
+            forum_comments=forum_comment_total,
+            activities=activity_total,
+            projects=project_total,
+            software=software_total,
+        ),
+        recent_forum_posts=[
+            ForumPostSummaryOut(id=post.id, title=post.title, created_at=post.created_at)
+            for post in forum_posts
+        ],
+        recent_forum_comments=[
+            ForumCommentSummaryOut(
+                id=comment.id,
+                post_id=comment.post_id,
+                post_title=post_title_map.get(comment.post_id, "Post deleted"),
+                created_at=comment.created_at,
+                content_preview=make_preview(comment.content),
+            )
+            for comment in forum_comments
+        ],
+        recent_activities=[
+            ActivitySummaryOut(id=item.id, title=item.title, date=item.date, type=item.type)
+            for item in activities
+        ],
+        recent_projects=[
+            ProjectSummaryOut(id=item.id, title=item.title, status=item.status, created_at=item.created_at)
+            for item in projects
+        ],
+        recent_software=[
+            SoftwareSummaryOut(id=item.id, name=item.name, version=item.version, upload_date=item.upload_date)
+            for item in software_items
+        ],
+    )

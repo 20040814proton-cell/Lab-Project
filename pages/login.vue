@@ -1,13 +1,14 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '~/stores/user'
 import { apiFetch } from '~/logics/api'
+import { ACCOUNT_MESSAGES } from '~/logics/accountMessages'
 
 const router = useRouter()
 const userStore = useUserStore()
 
-const username = ref('')
+const loginId = ref('')
 const password = ref('')
 const role = ref('student') // 'student' | 'teacher' | 'superadmin'
 const showPassword = ref(false)
@@ -24,8 +25,8 @@ const roleTitle = computed(() => {
 })
 
 async function handleLogin() {
-  if (!username.value || !password.value) {
-    showToast('请输入账号和密码')
+  if (!loginId.value.trim() || !password.value) {
+    showToast(ACCOUNT_MESSAGES.loginIdentifierRequired)
     return
   }
 
@@ -38,7 +39,7 @@ async function handleLogin() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: username.value,
+        username: loginId.value.trim(),
         password: password.value,
         role: role.value,
       }),
@@ -56,11 +57,11 @@ async function handleLogin() {
     }
 
     const err = await res.json().catch(() => ({}))
-    showToast(err.detail || '登录失败')
+    showToast(err.detail || ACCOUNT_MESSAGES.loginInvalidCredentials)
   }
   catch (error) {
     console.error(error)
-    showToast('网络错误，请稍后重试')
+    showToast(ACCOUNT_MESSAGES.networkError)
   }
   finally {
     loading.value = false
@@ -78,8 +79,8 @@ function showToast(msg: string) {
 
 <template>
   <div class="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#F5F5F7] px-4 py-10 dark:bg-[#121212]">
-    <div class="absolute inset-0 z-0 opacity-5 pointer-events-none" style="background-image: url('/noise.png');" />
-    <div class="absolute top-0 right-0 h-[45vh] w-[45vw] bg-gradient-to-b from-teal-500/10 to-transparent blur-3xl pointer-events-none" />
+    <div class="pointer-events-none absolute inset-0 z-0 opacity-5" style="background-image: url('/noise.png');" />
+    <div class="pointer-events-none absolute top-0 right-0 h-[45vh] w-[45vw] bg-gradient-to-b from-teal-500/10 to-transparent blur-3xl" />
 
     <div class="relative z-10 w-full max-w-md rounded-2xl border border-gray-200/50 bg-white/85 p-8 shadow-xl backdrop-blur-xl dark:border-gray-800/60 dark:bg-black/60 md:p-10">
       <div class="mb-8 text-center">
@@ -120,9 +121,9 @@ function showToast(msg: string) {
       <div class="space-y-5">
         <div class="relative">
           <input
-            v-model="username"
+            v-model="loginId"
             type="text"
-            placeholder="账号 / Username"
+            placeholder="姓名/账号/邮箱"
             class="w-full border-b border-gray-300 bg-transparent px-3 py-2 pr-9 outline-none transition-colors placeholder:text-gray-400 focus:border-teal-500 dark:border-gray-700"
             @keyup.enter="handleLogin"
           >

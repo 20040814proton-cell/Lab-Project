@@ -1,7 +1,8 @@
 ﻿<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { apiFetch, withApiBase } from '~/logics/api'
+import { ACCOUNT_MESSAGES } from '~/logics/accountMessages'
 import { useUserStore } from '~/stores/user'
 
 interface ContributionPayload {
@@ -20,9 +21,11 @@ interface ContributionPayload {
 }
 
 const userStore = useUserStore()
+const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)
+const accountSaving = ref(false)
 const contributionLoading = ref(false)
 const contributions = ref<ContributionPayload | null>(null)
 
@@ -39,6 +42,18 @@ const form = ref({
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const tagInput = ref('')
+
+const accountForm = ref({
+  name: '',
+  username: '',
+  login_email: '',
+  current_password: '',
+})
+const accountSnapshot = ref({
+  name: '',
+  username: '',
+  login_email: '',
+})
 
 const isTeacher = computed(() => userStore.hasRole('teacher', 'superadmin'))
 const isSuperadmin = computed(() => userStore.hasRole('superadmin'))
@@ -109,6 +124,24 @@ async function fetchContributions(username: string) {
   }
 }
 
+async function fetchAccountInfo() {
+  try {
+    const res = await apiFetch('/api/users/me/account')
+    if (!res.ok)
+      return
+    const data = await res.json()
+    accountForm.value.name = data.name || ''
+    accountForm.value.username = data.username || ''
+    accountForm.value.login_email = data.login_email || ''
+    accountSnapshot.value.name = data.name || ''
+    accountSnapshot.value.username = data.username || ''
+    accountSnapshot.value.login_email = data.login_email || ''
+  }
+  catch (error) {
+    console.error('Failed to fetch account info', error)
+  }
+}
+
 async function fetchProfile() {
   loading.value = true
   try {
@@ -131,7 +164,10 @@ async function fetchProfile() {
       form.value.research_areas_str = (data.research_areas || []).join(', ')
     }
 
-    await fetchContributions(String(data.username || ''))
+    await Promise.all([
+      fetchContributions(String(data.username || '')),
+      fetchAccountInfo(),
+    ])
   }
   catch (error) {
     console.error('Failed to fetch profile', error)
@@ -185,6 +221,80 @@ async function saveProfile() {
   }
   finally {
     saving.value = false
+  }
+}
+
+async function saveAccountInfo() {
+  const nextName = accountForm.value.name.trim()
+  const nextUsername = accountForm.value.username.trim()
+  const nextEmail = accountForm.value.login_email.trim().toLowerCase()
+  const password = accountForm.value.current_password
+
+  if (!password) {
+    alert(ACCOUNT_MESSAGES.currentPasswordRequired)
+    return
+  }
+  if (!nextName) {
+    alert(ACCOUNT_MESSAGES.nameRequired)
+    return
+  }
+  if (!nextUsername) {
+    alert(ACCOUNT_MESSAGES.usernameRequired)
+    return
+  }
+
+  const payload: any = { current_password: password }
+  if (nextName !== accountSnapshot.value.name)
+    payload.name = nextName
+  if (nextUsername !== accountSnapshot.value.username)
+    payload.username = nextUsername
+  if (nextEmail !== accountSnapshot.value.login_email)
+    payload.login_email = nextEmail || null
+
+  if (!Object.prototype.hasOwnProperty.call(payload, 'name') && !payload.username && !Object.prototype.hasOwnProperty.call(payload, 'login_email')) {
+    alert(ACCOUNT_MESSAGES.accountUpdateNoChanges)
+    return
+  }
+
+  accountSaving.value = true
+  try {
+    const res = await apiFetch('/api/users/me/account', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      alert(data.detail || ACCOUNT_MESSAGES.accountUpdateFailed)
+      return
+    }
+
+    accountSnapshot.value.name = data.name || nextName
+    accountSnapshot.value.username = data.username || nextUsername
+    accountSnapshot.value.login_email = data.login_email || ''
+    accountForm.value.current_password = ''
+    userStore.setUserInfo({
+      ...(userStore.userInfo || {}),
+      name: data.name || nextName,
+      username: data.username || nextUsername,
+    })
+
+    if (data.reauth_required) {
+      alert(ACCOUNT_MESSAGES.usernameUpdatedRelogin)
+      userStore.logout()
+      router.push('/login')
+      return
+    }
+
+    alert(ACCOUNT_MESSAGES.accountUpdated)
+    await fetchProfile()
+  }
+  catch (error) {
+    console.error(error)
+    alert(ACCOUNT_MESSAGES.accountUpdateFailed)
+  }
+  finally {
+    accountSaving.value = false
   }
 }
 
@@ -280,6 +390,36 @@ onMounted(fetchProfile)
         </div>
       </section>
     </div>
+
+    <section class="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+      <h2 class="mb-5 text-xl font-semibold">账号安全</h2>
+      <p class="mb-4 text-sm text-gray-500">支持使用姓名、用户名或登录邮箱登录；若姓名重复，请使用账号或登录邮箱。修改用户名后需要重新登录。</p>
+
+      <div class="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <label class="mb-2 block text-sm font-medium text-gray-600">姓名</label>
+          <input v-model="accountForm.name" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 outline-none transition focus:border-teal-500 dark:border-gray-700 dark:bg-gray-900">
+        </div>
+        <div>
+          <label class="mb-2 block text-sm font-medium text-gray-600">用户名</label>
+          <input v-model="accountForm.username" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 outline-none transition focus:border-teal-500 dark:border-gray-700 dark:bg-gray-900">
+        </div>
+        <div>
+          <label class="mb-2 block text-sm font-medium text-gray-600">登录邮箱（私有）</label>
+          <input v-model="accountForm.login_email" type="email" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 outline-none transition focus:border-teal-500 dark:border-gray-700 dark:bg-gray-900">
+        </div>
+        <div>
+          <label class="mb-2 block text-sm font-medium text-gray-600">当前密码（必填）</label>
+          <input v-model="accountForm.current_password" type="password" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 outline-none transition focus:border-teal-500 dark:border-gray-700 dark:bg-gray-900">
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-end">
+        <button class="rounded-lg bg-gray-900 px-6 py-2.5 text-white transition hover:bg-black disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white" :disabled="accountSaving" @click="saveAccountInfo">
+          {{ accountSaving ? '更新中...' : '更新账号' }}
+        </button>
+      </div>
+    </section>
 
     <section class="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
       <div class="mb-5 flex items-center justify-between">

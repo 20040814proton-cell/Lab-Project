@@ -1,12 +1,14 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiFetch } from '~/logics/api'
+import { ACCOUNT_MESSAGES } from '~/logics/accountMessages'
 
 const router = useRouter()
 
 const name = ref('')
 const password = ref('')
+const loginEmail = ref('')
 const role = ref('student') // 'student' | 'teacher'
 const grade = ref<number | null>(null)
 const inviteCode = ref('')
@@ -73,6 +75,10 @@ async function handleRegister() {
     showToast('请输入姓名和密码')
     return
   }
+  if (!loginEmail.value.trim()) {
+    showToast(ACCOUNT_MESSAGES.loginEmailRequired)
+    return
+  }
   if (!inviteCode.value) {
     showToast('请输入邀请码')
     return
@@ -97,6 +103,7 @@ async function handleRegister() {
       body: JSON.stringify({
         name: name.value,
         password: password.value,
+        login_email: loginEmail.value.trim(),
         role: role.value,
         grade: role.value === 'student' ? Number(grade.value) : undefined,
         invite_code: inviteCode.value,
@@ -105,7 +112,7 @@ async function handleRegister() {
 
     if (res.ok) {
       const data = await res.json()
-      successMessage.value = `注册成功，您的账号是：${data.username}`
+      successMessage.value = `注册成功，您的账号是：${data.username}，可用姓名、账号或邮箱登录`
       setTimeout(() => {
         router.push('/login')
       }, 3000)
@@ -113,7 +120,7 @@ async function handleRegister() {
     }
 
     const err = await res.json().catch(() => ({}))
-    showToast(err.detail || '注册失败')
+    showToast(err.detail || ACCOUNT_MESSAGES.registerFailed)
   }
   catch (e) {
     console.error(e)
@@ -136,9 +143,9 @@ onMounted(fetchGradeOptions)
 </script>
 
 <template>
-  <div class="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#F5F5F7] dark:bg-[#121212] px-4 py-10">
-    <div class="absolute inset-0 opacity-5 pointer-events-none z-0" style="background-image: url('/noise.png');" />
-    <div class="absolute top-0 right-0 h-[45vh] w-[45vw] bg-gradient-to-b from-teal-500/10 to-transparent blur-3xl pointer-events-none" />
+  <div class="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#F5F5F7] px-4 py-10 dark:bg-[#121212]">
+    <div class="pointer-events-none absolute inset-0 z-0 opacity-5" style="background-image: url('/noise.png');" />
+    <div class="pointer-events-none absolute top-0 right-0 h-[45vh] w-[45vw] bg-gradient-to-b from-teal-500/10 to-transparent blur-3xl" />
 
     <div class="relative z-10 w-full max-w-md rounded-2xl border border-gray-200/50 bg-white/85 p-8 shadow-xl backdrop-blur-xl dark:border-gray-800/60 dark:bg-black/60 md:p-10">
       <div v-if="successMessage" class="py-8 text-center">
@@ -177,19 +184,26 @@ onMounted(fetchGradeOptions)
           <input
             v-model="name"
             type="text"
-            placeholder="姓名 / Name"
+            placeholder="姓名"
             class="w-full border-b border-gray-300 bg-transparent px-3 py-2 outline-none transition-colors placeholder:text-gray-400 focus:border-teal-500 dark:border-gray-700"
           >
 
           <input
             v-model="password"
             type="password"
-            placeholder="设置密码 / Password"
+            placeholder="设置密码"
+            class="w-full border-b border-gray-300 bg-transparent px-3 py-2 outline-none transition-colors placeholder:text-gray-400 focus:border-teal-500 dark:border-gray-700"
+          >
+
+          <input
+            v-model="loginEmail"
+            type="email"
+            placeholder="登录邮箱（私有）"
             class="w-full border-b border-gray-300 bg-transparent px-3 py-2 outline-none transition-colors placeholder:text-gray-400 focus:border-teal-500 dark:border-gray-700"
           >
 
           <div v-if="role === 'student'" class="space-y-2">
-            <label class="block text-xs text-gray-500">年级 / Grade</label>
+            <label class="block text-xs text-gray-500">年级</label>
             <select
               v-model.number="grade"
               class="w-full rounded-lg border border-gray-200 bg-transparent px-3 py-2 outline-none dark:border-gray-700"
@@ -211,7 +225,7 @@ onMounted(fetchGradeOptions)
           <input
             v-model="inviteCode"
             type="text"
-            placeholder="邀请码 / Invite Code"
+            placeholder="邀请码"
             class="w-full border-b border-gray-300 bg-transparent px-3 py-2 outline-none transition-colors placeholder:text-gray-400 focus:border-teal-500 dark:border-gray-700"
           >
 

@@ -1,0 +1,15 @@
+export const ACCOUNT_MESSAGES = {
+  loginIdentifierRequired: '请输入登录标识和密码。',
+  loginInvalidCredentials: '账号、邮箱或密码错误。',
+  loginNameDuplicate: '姓名重复，请使用账号或登录邮箱。',
+  networkError: '网络错误，请稍后重试。',
+  registerFailed: '注册失败。',
+  loginEmailRequired: '请输入登录邮箱。',
+  nameRequired: '姓名不能为空。',
+  usernameRequired: '用户名不能为空。',
+  accountUpdateFailed: '账号更新失败。',
+  accountUpdateNoChanges: '未检测到可更新的账号信息。',
+  currentPasswordRequired: '请输入当前密码以确认账号修改。',
+  usernameUpdatedRelogin: '用户名已更新，请重新登录。',
+  accountUpdated: '账号信息已更新。',
+}

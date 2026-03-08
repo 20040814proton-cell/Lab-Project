@@ -119,6 +119,7 @@ class Token(BaseModel):
     username: str
     role: str
     user_role: str
+    must_change_password: bool = False
 
 class LoginRequest(BaseModel):
     username: str
@@ -168,4 +169,5 @@ async def login_for_access_token(form_data: LoginRequest):
         "username": user.username,
         "role": form_data.role,
         "user_role": user.user_role,
+        "must_change_password": bool(getattr(user, "must_change_password", False)),
     }

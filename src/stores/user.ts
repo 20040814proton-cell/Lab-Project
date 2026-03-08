@@ -37,6 +37,8 @@ export const useUserStore = defineStore('user', () => {
     return String(role).toLowerCase()
   })
 
+  const mustChangePassword = computed(() => Boolean(userInfo.value?.must_change_password))
+
   function hasRole(...roles: string[]) {
     const target = normalizedRole.value
     return roles.map(r => r.toLowerCase()).includes(target)
@@ -84,6 +86,7 @@ export const useUserStore = defineStore('user', () => {
     token,
     userInfo,
     normalizedRole,
+    mustChangePassword,
     hasRole,
     isTokenExpired,
     isTokenValid,

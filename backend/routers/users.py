@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Union
+import re
 from models import Student, Teacher, SuperAdmin, ForumPost, ForumComment, Activity, Project, Software
 from schemas import (
     StudentOut,
@@ -9,6 +10,8 @@ from schemas import (
     AccountInfoOut,
     AccountUpdate,
     AccountUpdateOut,
+    PasswordChangeIn,
+    PasswordChangeOut,
     PublicUserOut,
     UserContributionsOut,
     ContributionCountsOut,
@@ -31,6 +34,14 @@ from routers._account_utils import (
 from beanie import PydanticObjectId
 
 router = APIRouter()
+
+
+def is_valid_new_password(password: str) -> bool:
+    if len(password or "") < 8:
+        return False
+    has_letter = re.search(r"[A-Za-z]", password) is not None
+    has_digit = re.search(r"\d", password) is not None
+    return has_letter and has_digit
 
 async def find_user_by_username(username: str):
     user = await Teacher.find_one({"username": username})
@@ -213,6 +224,29 @@ async def update_my_account(req: AccountUpdate, current_user: dict = Depends(get
         login_email=next_login_email,
         reauth_required=username_changed,
     )
+
+
+@router.put("/me/password", response_model=PasswordChangeOut)
+async def update_my_password(req: PasswordChangeIn, current_user: dict = Depends(get_current_user)):
+    user_doc = await get_current_user_doc(current_user)
+    if not user_doc:
+        raise HTTPException(status_code=404, detail=AccountMessages.USER_NOT_FOUND)
+
+    current_password = str(req.current_password or "")
+    new_password = str(req.new_password or "")
+
+    if not verify_password(current_password, user_doc.password_hash):
+        raise HTTPException(status_code=400, detail=AccountMessages.CURRENT_PASSWORD_INCORRECT)
+    if not is_valid_new_password(new_password):
+        raise HTTPException(status_code=400, detail=AccountMessages.PASSWORD_TOO_WEAK)
+    if verify_password(new_password, user_doc.password_hash):
+        raise HTTPException(status_code=400, detail=AccountMessages.PASSWORD_SAME_AS_OLD)
+
+    await user_doc.set({
+        "password_hash": get_password_hash(new_password),
+        "must_change_password": False,
+    })
+    return PasswordChangeOut(status="success", must_change_password=False)
 
 @router.get("/public/{username}", response_model=PublicUserOut)
 async def read_user_public_profile(username: str):

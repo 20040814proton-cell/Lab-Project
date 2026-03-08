@@ -61,19 +61,24 @@ export const createApp = ViteSSG(
         // Auth Guard with Whitelist
         const publicRoutes = ['/', '/login', '/register', '/about']
         const publicPrefixes = ['/news', '/posts', '/forum', '/u']
-        
-        if (publicRoutes.includes(to.path) || publicPrefixes.some(p => to.path.startsWith(p))) {
-           next()
-           return
-        }
+        const isPublicRoute = publicRoutes.includes(to.path) || publicPrefixes.some(p => to.path.startsWith(p))
 
         if (!userStore.isTokenValid()) {
-           if (userStore.token)
-             userStore.logout()
-           next('/login')
-           return
+          if (userStore.token)
+            userStore.logout()
+          if (isPublicRoute) {
+            next()
+            return
+          }
+          next('/login')
+          return
         }
-        
+
+        if (userStore.mustChangePassword && to.path !== '/profile') {
+          next('/profile')
+          return
+        }
+
         next()
      })
       router.afterEach(() => {

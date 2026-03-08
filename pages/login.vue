@@ -51,8 +51,9 @@ async function handleLogin() {
         username: data.username,
         role: data.role,
         user_role: data.user_role || data.role,
+        must_change_password: Boolean(data.must_change_password),
       })
-      router.push('/dashboard')
+      router.push(data.must_change_password ? '/profile' : '/dashboard')
       return
     }
 

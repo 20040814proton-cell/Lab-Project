@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { apiFetch } from '~/logics/api'
+import { ACCOUNT_MESSAGES } from '~/logics/accountMessages'
 import { useUserStore } from '~/stores/user'
 
 const userStore = useUserStore()
@@ -27,6 +28,13 @@ const gradePolicy = ref({
   updated_by: '',
   updated_at: '',
 })
+const resetLoading = ref(false)
+const resetForm = ref({
+  role: 'student',
+  identifier: '',
+})
+const resetResult = ref<null | { username: string, temp_password: string, must_change_password: boolean }>(null)
+const copiedTempPassword = ref(false)
 
 const fetchInvites = async () => {
   loading.value = true
@@ -223,6 +231,49 @@ const copyInvite = async (code: string) => {
   }
 }
 
+const resetUserPassword = async () => {
+  const identifier = resetForm.value.identifier.trim()
+  if (!identifier) {
+    alert(ACCOUNT_MESSAGES.passwordResetIdentifierRequired)
+    return
+  }
+  resetLoading.value = true
+  copiedTempPassword.value = false
+  try {
+    const res = await apiFetch('/api/invites/password-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        role: resetForm.value.role,
+        identifier,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      alert(data.detail || ACCOUNT_MESSAGES.passwordResetFailed)
+      return
+    }
+    resetResult.value = data
+    alert(ACCOUNT_MESSAGES.passwordResetSucceeded)
+  }
+  finally {
+    resetLoading.value = false
+  }
+}
+
+const copyTempPassword = async () => {
+  if (!resetResult.value?.temp_password)
+    return
+  try {
+    await navigator.clipboard?.writeText(resetResult.value.temp_password)
+    copiedTempPassword.value = true
+    alert(ACCOUNT_MESSAGES.tempPasswordCopied)
+  }
+  catch {
+    alert('复制失败')
+  }
+}
+
 onMounted(fetchInvites)
 </script>
 
@@ -316,6 +367,56 @@ onMounted(fetchInvites)
               {{ gradePolicySaving ? '保存中...' : '保存年级策略' }}
             </button>
           </div>
+        </div>
+      </div>
+
+      <div class="mb-8 p-5 rounded-xl border border-amber-200/60 dark:border-amber-500/30 bg-white dark:bg-gray-900">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">账号密码重置</h2>
+          <span class="text-xs px-2 py-0.5 rounded bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+            超管代重置
+          </span>
+        </div>
+        <p class="mb-4 text-sm text-gray-500">
+          输入目标账号（账号/姓名/登录邮箱），系统会生成临时密码，并要求该用户首次登录后强制修改密码。
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="text-xs text-gray-400">目标角色</label>
+            <select v-model="resetForm.role" class="w-full p-2 mt-1 bg-gray-50 dark:bg-gray-800 rounded">
+              <option value="student">student</option>
+              <option value="teacher">teacher</option>
+              <option value="superadmin">superadmin</option>
+            </select>
+          </div>
+          <div class="md:col-span-2">
+            <label class="text-xs text-gray-400">账号标识（账号/姓名/登录邮箱）</label>
+            <input
+              v-model="resetForm.identifier"
+              class="w-full p-2 mt-1 bg-gray-50 dark:bg-gray-800 rounded"
+              placeholder="例如：2025003 / 张三 / user@example.com"
+            >
+          </div>
+        </div>
+        <div class="mt-4 flex justify-end">
+          <button class="px-4 py-2 bg-amber-500 text-white rounded-lg disabled:opacity-60" :disabled="resetLoading" @click="resetUserPassword">
+            {{ resetLoading ? '重置中...' : '重置密码' }}
+          </button>
+        </div>
+
+        <div v-if="resetResult" class="mt-4 rounded-lg border border-amber-200/70 dark:border-amber-500/40 bg-amber-50/80 dark:bg-amber-500/10 p-4">
+          <p class="text-sm text-amber-900 dark:text-amber-200">
+            已重置账号：<span class="font-semibold">{{ resetResult.username }}</span>
+          </p>
+          <p class="mt-2 text-sm text-amber-900 dark:text-amber-200 break-all">
+            临时密码：<span class="font-mono font-semibold">{{ resetResult.temp_password }}</span>
+          </p>
+          <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">
+            临时密码仅在本次页面展示，请立即复制并通过安全渠道发送给对应用户。
+          </p>
+          <button class="mt-3 px-3 py-1.5 text-sm rounded border border-amber-300 dark:border-amber-500/40" @click="copyTempPassword">
+            {{ copiedTempPassword ? '已复制' : '复制临时密码' }}
+          </button>
         </div>
       </div>
 

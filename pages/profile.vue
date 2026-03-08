@@ -26,6 +26,7 @@ const router = useRouter()
 const loading = ref(false)
 const saving = ref(false)
 const accountSaving = ref(false)
+const passwordSaving = ref(false)
 const contributionLoading = ref(false)
 const contributions = ref<ContributionPayload | null>(null)
 
@@ -49,6 +50,11 @@ const accountForm = ref({
   login_email: '',
   current_password: '',
 })
+const passwordForm = ref({
+  current_password: '',
+  new_password: '',
+  confirm_new_password: '',
+})
 const accountSnapshot = ref({
   name: '',
   username: '',
@@ -58,6 +64,7 @@ const accountSnapshot = ref({
 const isTeacher = computed(() => userStore.hasRole('teacher', 'superadmin'))
 const isSuperadmin = computed(() => userStore.hasRole('superadmin'))
 const profileUsername = computed(() => String(userStore.userInfo?.username || ''))
+const isForcePasswordChange = computed(() => userStore.mustChangePassword)
 
 function triggerUpload() {
   fileInput.value?.click()
@@ -150,7 +157,11 @@ async function fetchProfile() {
       return
 
     const data = await res.json()
-    userStore.setUserInfo(data)
+    const mustChangePassword = Boolean(userStore.userInfo?.must_change_password)
+    userStore.setUserInfo({
+      ...data,
+      must_change_password: mustChangePassword,
+    })
 
     form.value.avatar = data.avatar ? withApiBase(data.avatar) : ''
     form.value.major = data.major || ''
@@ -211,7 +222,10 @@ async function saveProfile() {
     }
 
     const data = await res.json()
-    userStore.setUserInfo(data)
+    userStore.setUserInfo({
+      ...data,
+      must_change_password: Boolean(userStore.userInfo?.must_change_password),
+    })
     await fetchProfile()
     alert('保存成功')
   }
@@ -276,6 +290,7 @@ async function saveAccountInfo() {
       ...(userStore.userInfo || {}),
       name: data.name || nextName,
       username: data.username || nextUsername,
+      must_change_password: Boolean(userStore.userInfo?.must_change_password),
     })
 
     if (data.reauth_required) {
@@ -297,6 +312,58 @@ async function saveAccountInfo() {
   }
 }
 
+async function savePassword() {
+  if (!passwordForm.value.current_password) {
+    alert(ACCOUNT_MESSAGES.passwordCurrentRequired)
+    return
+  }
+  if (!passwordForm.value.new_password) {
+    alert(ACCOUNT_MESSAGES.passwordNewRequired)
+    return
+  }
+  if (!passwordForm.value.confirm_new_password) {
+    alert(ACCOUNT_MESSAGES.passwordConfirmRequired)
+    return
+  }
+  if (passwordForm.value.new_password !== passwordForm.value.confirm_new_password) {
+    alert(ACCOUNT_MESSAGES.passwordConfirmMismatch)
+    return
+  }
+
+  passwordSaving.value = true
+  try {
+    const res = await apiFetch('/api/users/me/password', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_password: passwordForm.value.current_password,
+        new_password: passwordForm.value.new_password,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      alert(data.detail || ACCOUNT_MESSAGES.passwordUpdateFailed)
+      return
+    }
+
+    passwordForm.value.current_password = ''
+    passwordForm.value.new_password = ''
+    passwordForm.value.confirm_new_password = ''
+    userStore.setUserInfo({
+      ...(userStore.userInfo || {}),
+      must_change_password: false,
+    })
+    alert(ACCOUNT_MESSAGES.passwordUpdated)
+  }
+  catch (error) {
+    console.error(error)
+    alert(ACCOUNT_MESSAGES.passwordUpdateFailed)
+  }
+  finally {
+    passwordSaving.value = false
+  }
+}
+
 onMounted(fetchProfile)
 </script>
 
@@ -305,6 +372,13 @@ onMounted(fetchProfile)
     <h1 class="mb-8 text-3xl font-serif font-bold text-gray-900 dark:text-gray-100">
       <span class="border-l-4 border-teal-500 pl-4">个人资料</span>
     </h1>
+
+    <div
+      v-if="isForcePasswordChange"
+      class="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/60 dark:bg-amber-500/10 dark:text-amber-200"
+    >
+      {{ ACCOUNT_MESSAGES.forcePasswordChangeHint }}
+    </div>
 
     <div class="grid grid-cols-1 gap-8 lg:grid-cols-3">
       <section class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
@@ -416,6 +490,42 @@ onMounted(fetchProfile)
       <div class="mt-6 flex justify-end">
         <button class="rounded-lg bg-gray-900 px-6 py-2.5 text-white transition hover:bg-black disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white" :disabled="accountSaving" @click="saveAccountInfo">
           {{ accountSaving ? '更新中...' : '更新账号' }}
+        </button>
+      </div>
+    </section>
+
+    <section class="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+      <div class="mb-5 flex items-center justify-between">
+        <h2 class="text-xl font-semibold">修改密码</h2>
+        <span
+          v-if="isForcePasswordChange"
+          class="rounded-full bg-amber-100 px-2.5 py-1 text-xs text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
+        >
+          必须先完成
+        </span>
+      </div>
+      <p class="mb-4 text-sm text-gray-500">
+        为了账号安全，建议定期更新密码。新密码至少 8 位，且需包含字母和数字。
+      </p>
+
+      <div class="grid grid-cols-1 gap-5 md:grid-cols-3">
+        <div>
+          <label class="mb-2 block text-sm font-medium text-gray-600">当前密码</label>
+          <input v-model="passwordForm.current_password" type="password" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 outline-none transition focus:border-teal-500 dark:border-gray-700 dark:bg-gray-900">
+        </div>
+        <div>
+          <label class="mb-2 block text-sm font-medium text-gray-600">新密码</label>
+          <input v-model="passwordForm.new_password" type="password" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 outline-none transition focus:border-teal-500 dark:border-gray-700 dark:bg-gray-900">
+        </div>
+        <div>
+          <label class="mb-2 block text-sm font-medium text-gray-600">确认新密码</label>
+          <input v-model="passwordForm.confirm_new_password" type="password" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 outline-none transition focus:border-teal-500 dark:border-gray-700 dark:bg-gray-900">
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-end">
+        <button class="rounded-lg bg-teal-600 px-6 py-2.5 text-white transition hover:bg-teal-700 disabled:opacity-60" :disabled="passwordSaving" @click="savePassword">
+          {{ passwordSaving ? '保存中...' : '更新密码' }}
         </button>
       </div>
     </section>

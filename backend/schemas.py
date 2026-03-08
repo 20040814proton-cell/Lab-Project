@@ -53,6 +53,27 @@ class AccountUpdateOut(BaseModel):
     login_email: Optional[str] = None
     reauth_required: bool = False
 
+
+class PasswordChangeIn(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class PasswordChangeOut(BaseModel):
+    status: str = "success"
+    must_change_password: bool = False
+
+
+class PasswordResetByAdminIn(BaseModel):
+    role: str
+    identifier: str
+
+
+class PasswordResetByAdminOut(BaseModel):
+    username: str
+    temp_password: str
+    must_change_password: bool = True
+
 class TeacherOut(BaseModel):
     id: PydanticObjectId
     username: str

@@ -1,16 +1,35 @@
 from datetime import datetime, timezone
 import secrets
+import string
 from fastapi import APIRouter, Depends, HTTPException, Query
 from models import InviteCode, RegistrationGradePolicy, UserRole
-from schemas import GradePolicyOut, GradePolicyUpdate, InviteCreate, InviteOut
-from routers.auth import get_current_user
+from schemas import (
+    GradePolicyOut,
+    GradePolicyUpdate,
+    InviteCreate,
+    InviteOut,
+    PasswordResetByAdminIn,
+    PasswordResetByAdminOut,
+)
+from routers.auth import get_current_user, get_password_hash
+from routers._account_messages import AccountMessages
+from routers._account_utils import (
+    find_user_by_login_identifier,
+    find_user_by_name_identifier,
+    normalize_username,
+)
 from routers._grade_policy import POLICY_KEY, get_effective_grades, normalize_grades
 
 router = APIRouter()
 
 def require_superadmin(current_user: dict):
     if current_user.get('role') != UserRole.SUPERADMIN:
-        raise HTTPException(status_code=403, detail="Superadmin only")
+        raise HTTPException(status_code=403, detail=AccountMessages.SUPERADMIN_ONLY)
+
+
+def generate_temp_password(length: int = 12) -> str:
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 @router.get("/", response_model=list[InviteOut])
 async def list_invites(
@@ -103,4 +122,39 @@ async def update_grade_policy(req: GradePolicyUpdate, current_user: dict = Depen
         source=source,
         updated_by=policy.updated_by,
         updated_at=policy.updated_at,
+    )
+
+
+@router.post("/password-reset", response_model=PasswordResetByAdminOut)
+async def reset_user_password(req: PasswordResetByAdminIn, current_user: dict = Depends(get_current_user)):
+    require_superadmin(current_user)
+
+    identifier = normalize_username(req.identifier)
+    if not identifier:
+        raise HTTPException(status_code=400, detail=AccountMessages.PASSWORD_RESET_IDENTIFIER_REQUIRED)
+
+    try:
+        target_role = UserRole(req.role)
+    except Exception:
+        raise HTTPException(status_code=400, detail=AccountMessages.INVALID_ROLE)
+
+    user = await find_user_by_login_identifier(target_role, identifier)
+    if not user:
+        user, name_duplicated = await find_user_by_name_identifier(target_role, identifier)
+        if name_duplicated:
+            raise HTTPException(status_code=400, detail=AccountMessages.LOGIN_NAME_DUPLICATE)
+    if not user:
+        raise HTTPException(status_code=404, detail=AccountMessages.USER_NOT_FOUND)
+
+    temp_password = generate_temp_password()
+    await user.set({
+        "password_hash": get_password_hash(temp_password),
+        "must_change_password": True,
+        "password_reset_at": datetime.now(timezone.utc),
+    })
+
+    return PasswordResetByAdminOut(
+        username=str(getattr(user, "username", "")),
+        temp_password=temp_password,
+        must_change_password=True,
     )

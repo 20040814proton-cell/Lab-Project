@@ -29,6 +29,8 @@ class Student(Document):
     interests: list[str] = []
     bio: Optional[str] = None
     public_email: Optional[str] = None
+    must_change_password: bool = False
+    password_reset_at: Optional[datetime] = None
     
     class Settings:
         name = "students" # MongoDB collection name
@@ -53,6 +55,8 @@ class Teacher(Document):
     office: Optional[str] = None
     public_email: Optional[str] = None
     research_areas: list[str] = []
+    must_change_password: bool = False
+    password_reset_at: Optional[datetime] = None
 
     class Settings:
         name = "teachers"
@@ -66,6 +70,8 @@ class SuperAdmin(Document):
     role: str = "Superadmin"
     user_role: UserRole = UserRole.SUPERADMIN
     icon: str = "i-carbon-user-admin"
+    must_change_password: bool = False
+    password_reset_at: Optional[datetime] = None
 
     class Settings:
         name = "superadmins"

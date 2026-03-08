@@ -186,6 +186,7 @@ class ForumPost(Document):
     author_id: str
     author_name: Optional[str] = None
     tags: list[str] = []
+    liked_user_ids: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
     is_pinned: bool = False
     is_featured: bool = False
@@ -202,6 +203,7 @@ class ForumComment(Document):
     author_id: str
     author_name: Optional[str] = None
     content: str
+    liked_user_ids: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
 
     class Settings:

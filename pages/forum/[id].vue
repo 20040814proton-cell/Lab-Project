@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 import { MdCatalog, MdPreview } from 'md-editor-v3'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ForumCommentEditor from '~/components/forum/ForumCommentEditor.vue'
 import ForumPostEditorModal from '~/components/forum/ForumPostEditorModal.vue'
-import { apiFetch } from '~/logics/api'
 import { isDark } from '~/logics'
+import { apiFetch } from '~/logics/api'
 import { goBackOr } from '~/logics/navigation'
 import { useUserStore } from '~/stores/user'
 
@@ -31,6 +31,9 @@ const editModal = ref(false)
 const editing = ref(false)
 const moderating = ref(false)
 const mobileTocOpen = ref(false)
+const likingPost = ref(false)
+const likingCommentIds = ref<Set<string>>(new Set())
+
 const editorId = 'forum-preview'
 const scrollElement = typeof document !== 'undefined' ? document.documentElement : undefined
 const mdTheme = computed(() => (isDark.value ? 'dark' : 'light'))
@@ -58,7 +61,7 @@ function isOpaqueAuthor(value: string) {
   return isMongoObjectId || isUuid || isLongDigits
 }
 
-const displayAuthor = (item: any) => {
+function displayAuthor(item: any) {
   const username = normalizeAuthorText(item?.author_name)
   const displayName = normalizeAuthorText(item?.author_display_name)
   const authorId = normalizeAuthorText(item?.author_id)
@@ -74,7 +77,7 @@ const displayAuthor = (item: any) => {
   return 'Unknown user'
 }
 
-const authorUsername = (item: any) => {
+function authorUsername(item: any) {
   const username = normalizeAuthorText(item?.author_name)
   return username && !isOpaqueAuthor(username) ? username : ''
 }
@@ -89,7 +92,7 @@ const editInitialData = computed(() => {
   }
 })
 
-const canDeleteComment = (comment: any) => {
+function canDeleteComment(comment: any) {
   const username = userStore.userInfo?.username
   return Boolean((username && (comment.author_name === username || String(comment.author_id || '') === username)) || canModerate.value)
 }
@@ -136,8 +139,21 @@ function goBack() {
   goBackOr(router, '/forum')
 }
 
+function setCommentLiking(commentId: string, value: boolean) {
+  const next = new Set(likingCommentIds.value)
+  if (value)
+    next.add(commentId)
+  else
+    next.delete(commentId)
+  likingCommentIds.value = next
+}
+
+function isCommentLiking(commentId: string) {
+  return likingCommentIds.value.has(commentId)
+}
+
 async function fetchPost() {
-  const res = await apiFetch(`/api/forum/${route.params.id}`, {}, { auth: false })
+  const res = await apiFetch(`/api/forum/${route.params.id}`)
   if (res.ok) {
     post.value = await res.json()
     mobileTocOpen.value = false
@@ -162,11 +178,7 @@ async function fetchComments(reset = false) {
 
   commentLoading.value = true
   try {
-    const res = await apiFetch(
-      `/api/forum/${route.params.id}/comments?page=${commentPage.value}&page_size=${commentPageSize}`,
-      {},
-      { auth: false },
-    )
+    const res = await apiFetch(`/api/forum/${route.params.id}/comments?page=${commentPage.value}&page_size=${commentPageSize}`)
     if (res.ok) {
       const data = await res.json()
       comments.value = [...comments.value, ...data]
@@ -178,6 +190,52 @@ async function fetchComments(reset = false) {
   }
   finally {
     commentLoading.value = false
+  }
+}
+
+async function togglePostLike() {
+  if (!post.value || likingPost.value)
+    return
+  if (!ensureLogin('点赞'))
+    return
+
+  likingPost.value = true
+  try {
+    const res = await apiFetch(`/api/forum/${route.params.id}/like`, { method: 'POST' })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(err.detail || '点赞失败')
+      return
+    }
+    const data = await res.json()
+    post.value.like_count = data.like_count
+    post.value.liked_by_me = data.liked_by_me
+  }
+  finally {
+    likingPost.value = false
+  }
+}
+
+async function toggleCommentLike(comment: any) {
+  if (!comment?.id || isCommentLiking(comment.id))
+    return
+  if (!ensureLogin('点赞'))
+    return
+
+  setCommentLiking(comment.id, true)
+  try {
+    const res = await apiFetch(`/api/forum/comments/${comment.id}/like`, { method: 'POST' })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(err.detail || '点赞失败')
+      return
+    }
+    const data = await res.json()
+    comment.like_count = data.like_count
+    comment.liked_by_me = data.liked_by_me
+  }
+  finally {
+    setCommentLiking(comment.id, false)
   }
 }
 
@@ -307,8 +365,12 @@ onMounted(async () => {
     </div>
 
     <div v-else-if="loadError" class="py-20 text-center">
-      <p class="text-red-500 mb-4">{{ loadError }}</p>
-      <RouterLink to="/forum" class="text-teal-600 hover:underline">返回论坛</RouterLink>
+      <p class="text-red-500 mb-4">
+        {{ loadError }}
+      </p>
+      <RouterLink to="/forum" class="text-teal-600 hover:underline">
+        返回论坛
+      </RouterLink>
     </div>
 
     <div v-else-if="post">
@@ -336,13 +398,24 @@ onMounted(async () => {
           <span v-if="post.is_featured" class="px-2 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 dark:bg-teal-500/15 dark:text-teal-300 dark:border-teal-500/30">加精</span>
         </div>
 
-        <h1 class="reader-title text-2xl md:text-3xl font-bold leading-tight mb-3">{{ post.title }}</h1>
+        <h1 class="reader-title text-2xl md:text-3xl font-bold leading-tight mb-3">
+          {{ post.title }}
+        </h1>
 
         <div v-if="post.tags?.length" class="mb-4 flex flex-wrap gap-2">
           <span v-for="t in post.tags" :key="t" class="text-xs px-2 py-0.5 rounded bg-teal-50 text-teal-600 dark:bg-teal-500/12 dark:text-teal-300">{{ t }}</span>
         </div>
 
         <div class="flex flex-wrap gap-2">
+          <button
+            class="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg inline-flex items-center gap-1.5 disabled:opacity-60"
+            :class="post.liked_by_me ? 'text-teal-600 border-teal-300 bg-teal-50/60 dark:bg-teal-500/10' : ''"
+            :disabled="likingPost"
+            @click="togglePostLike"
+          >
+            <span class="i-carbon-thumbs-up" />
+            <span>{{ post.like_count || 0 }}</span>
+          </button>
           <button v-if="canModerate" class="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg" @click="togglePinned">
             {{ post.is_pinned ? '取消置顶' : '置顶' }}
           </button>
@@ -377,17 +450,21 @@ onMounted(async () => {
         </div>
         <aside class="hidden lg:block sticky top-24">
           <div class="reader-panel reader-toc rounded-xl p-4">
-            <div class="text-sm font-semibold mb-2">目录</div>
+            <div class="text-sm font-semibold mb-2">
+              目录
+            </div>
             <MdCatalog :editor-id="editorId" :scroll-element="scrollElement" :theme="mdTheme" />
           </div>
         </aside>
       </div>
 
       <div class="mt-10 reader-motion-enter reader-motion-enter--delay-2">
-        <h3 class="text-lg font-bold mb-4">评论</h3>
+        <h3 class="text-lg font-bold mb-4">
+          评论
+        </h3>
 
         <div class="space-y-4">
-          <div v-for="comment in comments" :key="comment.id" class="reader-panel forum-comment-card p-4 rounded-xl">
+          <div v-for="comment in comments" :key="comment.id" class="reader-panel forum-comment-card p-3 md:p-4 rounded-xl">
             <div class="flex items-start justify-between gap-4">
               <div class="min-w-0 flex-1">
                 <div class="text-xs text-gray-400 mb-1 flex items-center gap-1.5">
@@ -427,12 +504,25 @@ onMounted(async () => {
                   {{ isCommentExpanded(comment.id) ? '收起' : '展开' }}
                 </button>
               </div>
-              <button v-if="canDeleteComment(comment)" class="text-xs text-red-500" @click="deleteComment(comment.id)">
-                删除
-              </button>
+              <div class="flex flex-col items-end gap-2">
+                <button
+                  class="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 inline-flex items-center gap-1 disabled:opacity-60"
+                  :class="comment.liked_by_me ? 'text-teal-600 border-teal-300 bg-teal-50/60 dark:bg-teal-500/10' : ''"
+                  :disabled="isCommentLiking(comment.id)"
+                  @click="toggleCommentLike(comment)"
+                >
+                  <span class="i-carbon-thumbs-up" />
+                  <span>{{ comment.like_count || 0 }}</span>
+                </button>
+                <button v-if="canDeleteComment(comment)" class="text-xs text-red-500" @click="deleteComment(comment.id)">
+                  删除
+                </button>
+              </div>
             </div>
           </div>
-          <div v-if="comments.length === 0" class="text-sm text-gray-400">暂无评论</div>
+          <div v-if="comments.length === 0" class="text-sm text-gray-400">
+            暂无评论
+          </div>
         </div>
 
         <div class="mt-4 flex justify-center">
@@ -444,19 +534,24 @@ onMounted(async () => {
           >
             {{ commentLoading ? '加载中...' : '加载更多评论' }}
           </button>
-          <div v-else class="text-xs text-gray-400">没有更多评论了</div>
+          <div v-else class="text-xs text-gray-400">
+            没有更多评论了
+          </div>
         </div>
 
         <div v-if="isLoggedIn" class="mt-6">
           <ForumCommentEditor
             v-model="newComment"
+            :editor-height="180"
             :submitting="submitting"
             @submit="submitComment"
           />
         </div>
         <div v-else class="mt-6 p-4 rounded-xl border border-teal-200 bg-teal-50 text-sm text-teal-700 dark:border-teal-500/30 dark:bg-teal-500/10 dark:text-teal-200">
           登录后可参与评论
-          <button class="ml-3 underline" @click="router.push('/login')">前往登录</button>
+          <button class="ml-3 underline" @click="router.push('/login')">
+            前往登录
+          </button>
         </div>
       </div>
     </div>

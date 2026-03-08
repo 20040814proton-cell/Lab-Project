@@ -328,6 +328,8 @@ class ForumPostOut(ForumPostCreate):
     author_id: str
     author_name: Optional[str] = None
     author_display_name: Optional[str] = None
+    like_count: int = 0
+    liked_by_me: bool = False
     created_at: datetime
     is_pinned: bool
     is_featured: bool
@@ -344,6 +346,8 @@ class ForumCommentOut(ForumCommentCreate):
     author_id: str
     author_name: Optional[str] = None
     author_display_name: Optional[str] = None
+    like_count: int = 0
+    liked_by_me: bool = False
     created_at: datetime
 
 class ForumUserCommentOut(BaseModel):
@@ -353,5 +357,13 @@ class ForumUserCommentOut(BaseModel):
     author_id: str
     author_name: Optional[str] = None
     author_display_name: Optional[str] = None
+    like_count: int = 0
+    liked_by_me: bool = False
     content: str
     created_at: datetime
+
+
+class ForumLikeToggleOut(BaseModel):
+    id: PydanticObjectId
+    like_count: int
+    liked_by_me: bool

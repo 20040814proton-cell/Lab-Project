@@ -4,7 +4,7 @@ import hmac
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
@@ -31,6 +31,7 @@ pwd_context = CryptContext(
 )
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
+optional_bearer = HTTPBearer(auto_error=False)
 
 router = APIRouter()
 
@@ -111,6 +112,31 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         return {"username": username, "role": role, "id": user.id}
     except JWTError:
         raise credentials_exception
+
+
+async def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_bearer)):
+    if not credentials:
+        return None
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        role: str = payload.get("role")
+        if not username or not role:
+            return None
+
+        user = None
+        if role == UserRole.STUDENT:
+            user = await Student.find_one({"username": username})
+        elif role == UserRole.TEACHER:
+            user = await Teacher.find_one({"username": username})
+        elif role == UserRole.SUPERADMIN:
+            user = await SuperAdmin.find_one({"username": username})
+
+        if not user:
+            return None
+        return {"username": username, "role": role, "id": str(user.id)}
+    except Exception:
+        return None
 
 # --- Schemas ---
 class Token(BaseModel):

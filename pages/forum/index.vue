@@ -28,6 +28,7 @@ const page = ref(1)
 const pageSize = 10
 const hasMore = ref(true)
 const moderating = ref(false)
+const likingPostIds = ref<Set<string>>(new Set())
 
 const canModerate = computed(() => userStore.hasRole('teacher', 'superadmin'))
 const isLoggedIn = computed(() => userStore.isTokenValid())
@@ -36,8 +37,9 @@ const isCommentMode = computed(() => currentMode.value === 'my_comments')
 const creatorFilter = computed(() => typeof route.query.creator === 'string' ? route.query.creator.trim() : '')
 const skeletonRows = [1, 2, 3, 4]
 
-const summary = (markdown: string, max = 180) =>
-  buildSummaryFromMarkdown(markdown || '', max) || '暂无内容摘要'
+function summary(markdown: string, max = 180) {
+  return buildSummaryFromMarkdown(markdown || '', max) || '暂无内容摘要'
+}
 
 function normalizeAuthorText(value: unknown) {
   if (typeof value !== 'string')
@@ -54,7 +56,7 @@ function isOpaqueAuthor(value: string) {
   return isMongoObjectId || isUuid || isLongDigits
 }
 
-const displayAuthor = (item: any) => {
+function displayAuthor(item: any) {
   const username = normalizeAuthorText(item?.author_name)
   const displayName = normalizeAuthorText(item?.author_display_name)
   const authorId = normalizeAuthorText(item?.author_id)
@@ -70,7 +72,7 @@ const displayAuthor = (item: any) => {
   return 'Unknown user'
 }
 
-const authorUsername = (item: any) => {
+function authorUsername(item: any) {
   const username = normalizeAuthorText(item?.author_name)
   return username && !isOpaqueAuthor(username) ? username : ''
 }
@@ -88,7 +90,8 @@ async function fetchTags() {
     const res = await apiFetch('/api/forum/tags', {}, { auth: false })
     if (res.ok)
       tagOptions.value = await res.json()
-  } catch (error) {
+  }
+  catch (error) {
     console.error(error)
   }
 }
@@ -134,7 +137,7 @@ async function fetchData(reset = false) {
         : `/api/forum/users/${username}/comments?${params.toString()}`
     }
 
-    const res = await apiFetch(url, {}, { auth: false })
+    const res = await apiFetch(url)
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       errorMessage.value = err.detail || '加载失败，请稍后重试'
@@ -151,11 +154,49 @@ async function fetchData(reset = false) {
       hasMore.value = false
     else
       page.value += 1
-  } catch (error) {
+  }
+  catch (error) {
     console.error(error)
     errorMessage.value = '网络异常，请稍后重试'
-  } finally {
+  }
+  finally {
     loading.value = false
+  }
+}
+
+function setPostLiking(postId: string, loading: boolean) {
+  const next = new Set(likingPostIds.value)
+  if (loading)
+    next.add(postId)
+  else
+    next.delete(postId)
+  likingPostIds.value = next
+}
+
+function isPostLiking(postId: string) {
+  return likingPostIds.value.has(postId)
+}
+
+async function togglePostLike(post: any) {
+  if (!ensureLogin('点赞'))
+    return
+  if (!post?.id || isPostLiking(post.id))
+    return
+
+  setPostLiking(post.id, true)
+  try {
+    const res = await apiFetch(`/api/forum/${post.id}/like`, { method: 'POST' })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(err.detail || '点赞失败')
+      return
+    }
+    const data = await res.json()
+    post.like_count = data.like_count
+    post.liked_by_me = data.liked_by_me
+  }
+  finally {
+    setPostLiking(post.id, false)
   }
 }
 
@@ -197,11 +238,13 @@ async function submit(payload: { title: string, content: string, tags: string[] 
       showModal.value = false
       await fetchData(true)
       await fetchTags()
-    } else {
+    }
+    else {
       const err = await res.json().catch(() => ({}))
       alert(err.detail || '发布失败')
     }
-  } finally {
+  }
+  finally {
     submitting.value = false
   }
 }
@@ -217,7 +260,8 @@ async function togglePinned(post: any) {
       body: JSON.stringify({ is_pinned: !post.is_pinned }),
     })
     await fetchData(true)
-  } finally {
+  }
+  finally {
     moderating.value = false
   }
 }
@@ -233,7 +277,8 @@ async function toggleFeatured(post: any) {
       body: JSON.stringify({ is_featured: !post.is_featured }),
     })
     await fetchData(true)
-  } finally {
+  }
+  finally {
     moderating.value = false
   }
 }
@@ -253,8 +298,12 @@ watch(() => route.query.creator, () => {
   <div class="forum-page min-h-screen pt-24 px-6 pb-20 max-w-6xl mx-auto">
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-3xl font-serif font-bold">论坛</h1>
-        <p class="text-sm text-gray-400 mt-2">Forum & Discussions</p>
+        <h1 class="text-3xl font-serif font-bold">
+          论坛
+        </h1>
+        <p class="text-sm text-gray-400 mt-2">
+          Forum & Discussions
+        </p>
       </div>
       <button class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition" @click="openCreate">
         发布帖子
@@ -337,7 +386,9 @@ watch(() => route.query.creator, () => {
       class="mb-6 p-3 rounded-lg border border-teal-200 bg-teal-50 text-sm text-teal-700 flex items-center justify-between"
     >
       <span>当前仅展示 @{{ creatorFilter }} 的帖子</span>
-      <RouterLink to="/forum" class="hover:underline">清除筛选</RouterLink>
+      <RouterLink to="/forum" class="hover:underline">
+        清除筛选
+      </RouterLink>
     </div>
 
     <div v-if="errorMessage" class="mb-6 p-3 rounded-lg border border-red-200 bg-red-50 text-sm text-red-600">
@@ -429,6 +480,18 @@ watch(() => route.query.creator, () => {
                     {{ t }}
                   </button>
                 </div>
+
+                <div class="mt-3">
+                  <button
+                    class="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-teal-300 hover:text-teal-600 transition disabled:opacity-60"
+                    :class="post.liked_by_me ? 'text-teal-600 border-teal-300 bg-teal-50/60 dark:bg-teal-500/10' : ''"
+                    :disabled="isPostLiking(post.id)"
+                    @click.stop="togglePostLike(post)"
+                  >
+                    <span class="i-carbon-thumbs-up" />
+                    <span>{{ post.like_count || 0 }}</span>
+                  </button>
+                </div>
               </div>
 
               <div v-if="canModerate" class="flex items-center gap-2 shrink-0">
@@ -466,7 +529,9 @@ watch(() => route.query.creator, () => {
         >
           {{ loading ? '加载中...' : '加载更多' }}
         </button>
-        <div v-else class="text-xs text-gray-400">没有更多了</div>
+        <div v-else class="text-xs text-gray-400">
+          没有更多了
+        </div>
       </div>
     </div>
 

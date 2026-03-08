@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 from beanie import PydanticObjectId
 
 from models import ForumPost, ForumComment, Student, Teacher, SuperAdmin, UserRole
-from routers.auth import get_current_user
+from routers.auth import get_current_user, get_optional_user
 from schemas import (
     ForumPostCreate,
     ForumPostUpdate,
@@ -12,6 +12,7 @@ from schemas import (
     ForumCommentCreate,
     ForumCommentUpdate,
     ForumCommentOut,
+    ForumLikeToggleOut,
     ForumUserCommentOut,
 )
 
@@ -20,6 +21,12 @@ router = APIRouter()
 
 def can_moderate(current_user: dict):
     return current_user.get('role') in [UserRole.TEACHER, UserRole.SUPERADMIN]
+
+
+def get_like_state(liked_user_ids: Optional[List[str]], current_user: Optional[dict]):
+    ids = [str(item) for item in (liked_user_ids or []) if item]
+    current_user_id = str(current_user.get("id")) if current_user else ""
+    return len(ids), bool(current_user_id and current_user_id in ids)
 
 
 async def find_user_by_id(user_id: Optional[str]):
@@ -80,7 +87,8 @@ async def normalize_author_name(doc) -> Tuple[Optional[str], Optional[str]]:
     return username, display_name
 
 
-def serialize_post(post: ForumPost, display_name: Optional[str]) -> ForumPostOut:
+def serialize_post(post: ForumPost, display_name: Optional[str], current_user: Optional[dict] = None) -> ForumPostOut:
+    like_count, liked_by_me = get_like_state(getattr(post, "liked_user_ids", []), current_user)
     return ForumPostOut(
         id=post.id,
         title=post.title,
@@ -89,37 +97,42 @@ def serialize_post(post: ForumPost, display_name: Optional[str]) -> ForumPostOut
         author_id=post.author_id,
         author_name=post.author_name,
         author_display_name=display_name or post.author_name or post.author_id,
+        like_count=like_count,
+        liked_by_me=liked_by_me,
         created_at=post.created_at,
         is_pinned=post.is_pinned,
         is_featured=post.is_featured,
     )
 
 
-def serialize_comment(comment: ForumComment, display_name: Optional[str]) -> ForumCommentOut:
+def serialize_comment(comment: ForumComment, display_name: Optional[str], current_user: Optional[dict] = None) -> ForumCommentOut:
+    like_count, liked_by_me = get_like_state(getattr(comment, "liked_user_ids", []), current_user)
     return ForumCommentOut(
         id=comment.id,
         post_id=comment.post_id,
         author_id=comment.author_id,
         author_name=comment.author_name,
         author_display_name=display_name or comment.author_name or comment.author_id,
+        like_count=like_count,
+        liked_by_me=liked_by_me,
         content=comment.content,
         created_at=comment.created_at,
     )
 
 
-async def normalize_posts(posts: List[ForumPost]) -> List[ForumPostOut]:
+async def normalize_posts(posts: List[ForumPost], current_user: Optional[dict] = None) -> List[ForumPostOut]:
     normalized: List[ForumPostOut] = []
     for post in posts:
         _, display_name = await normalize_author_name(post)
-        normalized.append(serialize_post(post, display_name))
+        normalized.append(serialize_post(post, display_name, current_user))
     return normalized
 
 
-async def normalize_comments(comments: List[ForumComment]) -> List[ForumCommentOut]:
+async def normalize_comments(comments: List[ForumComment], current_user: Optional[dict] = None) -> List[ForumCommentOut]:
     normalized: List[ForumCommentOut] = []
     for comment in comments:
         _, display_name = await normalize_author_name(comment)
-        normalized.append(serialize_comment(comment, display_name))
+        normalized.append(serialize_comment(comment, display_name, current_user))
     return normalized
 
 
@@ -130,6 +143,7 @@ async def list_posts(
     creator: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50),
+    current_user: Optional[dict] = Depends(get_optional_user),
 ):
     filters = []
     if q:
@@ -148,7 +162,7 @@ async def list_posts(
 
     skip = (page - 1) * page_size
     posts = await ForumPost.find(query).sort("-is_pinned", "-is_featured", "-created_at").skip(skip).limit(page_size).to_list()
-    return await normalize_posts(posts)
+    return await normalize_posts(posts, current_user)
 
 
 @router.get("/tags", response_model=List[str])
@@ -168,6 +182,7 @@ async def list_user_posts(
     tag: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50),
+    current_user: Optional[dict] = Depends(get_optional_user),
 ):
     user = await find_user_by_username(username)
     if not user:
@@ -182,7 +197,7 @@ async def list_user_posts(
     query = {"$and": filters} if len(filters) > 1 else filters[0]
     skip = (page - 1) * page_size
     posts = await ForumPost.find(query).sort("-is_pinned", "-is_featured", "-created_at").skip(skip).limit(page_size).to_list()
-    return await normalize_posts(posts)
+    return await normalize_posts(posts, current_user)
 
 
 @router.get("/users/{username}/comments", response_model=List[ForumUserCommentOut])
@@ -191,6 +206,7 @@ async def list_user_comments(
     q: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50),
+    current_user: Optional[dict] = Depends(get_optional_user),
 ):
     user = await find_user_by_username(username)
     if not user:
@@ -220,19 +236,24 @@ async def list_user_comments(
     posts = await ForumPost.find({"_id": {"$in": valid_post_ids}}).to_list() if valid_post_ids else []
     post_title_map = {str(post.id): post.title for post in posts}
 
-    return [
-        ForumUserCommentOut(
-            id=comment.id,
-            post_id=comment.post_id,
-            post_title=post_title_map.get(comment.post_id, "Post deleted"),
-            author_id=comment.author_id,
-            author_name=comment.author_name,
-            author_display_name=display_name_map.get(str(comment.id), comment.author_name or comment.author_id),
-            content=comment.content,
-            created_at=comment.created_at,
+    result: List[ForumUserCommentOut] = []
+    for comment in comments:
+        like_count, liked_by_me = get_like_state(getattr(comment, "liked_user_ids", []), current_user)
+        result.append(
+            ForumUserCommentOut(
+                id=comment.id,
+                post_id=comment.post_id,
+                post_title=post_title_map.get(comment.post_id, "Post deleted"),
+                author_id=comment.author_id,
+                author_name=comment.author_name,
+                author_display_name=display_name_map.get(str(comment.id), comment.author_name or comment.author_id),
+                like_count=like_count,
+                liked_by_me=liked_by_me,
+                content=comment.content,
+                created_at=comment.created_at,
+            ),
         )
-        for comment in comments
-    ]
+    return result
 
 
 @router.post("/", response_model=ForumPostOut)
@@ -244,16 +265,16 @@ async def create_post(req: ForumPostCreate, current_user: dict = Depends(get_cur
     )
     await post.insert()
     _, display_name = await normalize_author_name(post)
-    return serialize_post(post, display_name)
+    return serialize_post(post, display_name, current_user)
 
 
 @router.get("/{post_id}", response_model=ForumPostOut)
-async def get_post(post_id: PydanticObjectId):
+async def get_post(post_id: PydanticObjectId, current_user: Optional[dict] = Depends(get_optional_user)):
     post = await ForumPost.get(post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
     _, display_name = await normalize_author_name(post)
-    return serialize_post(post, display_name)
+    return serialize_post(post, display_name, current_user)
 
 
 @router.delete("/{post_id}")
@@ -284,7 +305,7 @@ async def update_post(post_id: PydanticObjectId, req: ForumPostUpdate, current_u
         post = await ForumPost.get(post_id) or post
 
     _, display_name = await normalize_author_name(post)
-    return serialize_post(post, display_name)
+    return serialize_post(post, display_name, current_user)
 
 
 @router.get("/{post_id}/comments", response_model=List[ForumCommentOut])
@@ -292,10 +313,11 @@ async def list_comments(
     post_id: PydanticObjectId,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50),
+    current_user: Optional[dict] = Depends(get_optional_user),
 ):
     skip = (page - 1) * page_size
     comments = await ForumComment.find({"post_id": str(post_id)}).sort("created_at").skip(skip).limit(page_size).to_list()
-    return await normalize_comments(comments)
+    return await normalize_comments(comments, current_user)
 
 
 @router.post("/{post_id}/comments", response_model=ForumCommentOut)
@@ -312,7 +334,45 @@ async def create_comment(post_id: PydanticObjectId, req: ForumCommentCreate, cur
     )
     await comment.insert()
     _, display_name = await normalize_author_name(comment)
-    return serialize_comment(comment, display_name)
+    return serialize_comment(comment, display_name, current_user)
+
+
+@router.post("/{post_id}/like", response_model=ForumLikeToggleOut)
+async def toggle_post_like(post_id: PydanticObjectId, current_user: dict = Depends(get_current_user)):
+    post = await ForumPost.get(post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    user_id = str(current_user["id"])
+    liked_user_ids = [str(item) for item in (getattr(post, "liked_user_ids", []) or []) if item]
+    if user_id in liked_user_ids:
+        liked_user_ids = [item for item in liked_user_ids if item != user_id]
+        liked_by_me = False
+    else:
+        liked_user_ids.append(user_id)
+        liked_by_me = True
+
+    await post.set({"liked_user_ids": liked_user_ids})
+    return ForumLikeToggleOut(id=post.id, like_count=len(liked_user_ids), liked_by_me=liked_by_me)
+
+
+@router.post("/comments/{comment_id}/like", response_model=ForumLikeToggleOut)
+async def toggle_comment_like(comment_id: PydanticObjectId, current_user: dict = Depends(get_current_user)):
+    comment = await ForumComment.get(comment_id)
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    user_id = str(current_user["id"])
+    liked_user_ids = [str(item) for item in (getattr(comment, "liked_user_ids", []) or []) if item]
+    if user_id in liked_user_ids:
+        liked_user_ids = [item for item in liked_user_ids if item != user_id]
+        liked_by_me = False
+    else:
+        liked_user_ids.append(user_id)
+        liked_by_me = True
+
+    await comment.set({"liked_user_ids": liked_user_ids})
+    return ForumLikeToggleOut(id=comment.id, like_count=len(liked_user_ids), liked_by_me=liked_by_me)
 
 
 @router.delete("/comments/{comment_id}")
@@ -340,4 +400,4 @@ async def update_comment(comment_id: PydanticObjectId, req: ForumCommentUpdate, 
         comment = await ForumComment.get(comment_id) or comment
 
     _, display_name = await normalize_author_name(comment)
-    return serialize_comment(comment, display_name)
+    return serialize_comment(comment, display_name, current_user)

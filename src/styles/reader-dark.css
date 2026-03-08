@@ -277,6 +277,14 @@ html.dark .forum-page .forum-skeleton-card {
   transform: translateY(-2px);
 }
 
+.forum-detail-page .forum-comment-card {
+  font-size: 0.94rem;
+}
+
+.forum-detail-page .reader-comment-body {
+  line-height: 1.68;
+}
+
 .news-detail-page .reader-cover--media {
   padding: 0.6rem;
   max-height: clamp(220px, 52vh, 620px);

@@ -6,8 +6,10 @@ import { compactMarkdownToolbars } from '~/logics/markdown-editor'
 const props = withDefaults(defineProps<{
   modelValue: string
   submitting?: boolean
+  editorHeight?: number
 }>(), {
   submitting: false,
+  editorHeight: 180,
 })
 
 const emit = defineEmits<{
@@ -15,7 +17,7 @@ const emit = defineEmits<{
   (e: 'submit'): void
 }>()
 
-const onUploadImg = async (files: File[], callback: (urls: string[]) => void) => {
+async function onUploadImg(files: File[], callback: (urls: string[]) => void) {
   try {
     const urls = await Promise.all(files.map(async (file) => {
       const data = new FormData()
@@ -32,7 +34,8 @@ const onUploadImg = async (files: File[], callback: (urls: string[]) => void) =>
       return withApiBase(body.url)
     }))
     callback(urls)
-  } catch (error: any) {
+  }
+  catch (error: any) {
     alert(error?.message || '图片上传失败')
   }
 }
@@ -48,7 +51,7 @@ const onUploadImg = async (files: File[], callback: (urls: string[]) => void) =>
         :model-value="modelValue"
         language="zh-CN"
         :toolbars="compactMarkdownToolbars"
-        :style="{ height: '220px' }"
+        :style="{ height: `${props.editorHeight}px` }"
         :preview="false"
         :on-upload-img="onUploadImg"
         @update:model-value="emit('update:modelValue', $event)"
@@ -61,4 +64,3 @@ const onUploadImg = async (files: File[], callback: (urls: string[]) => void) =>
     </div>
   </div>
 </template>
-

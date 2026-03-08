@@ -18,7 +18,7 @@ from schemas import (
     ProjectSummaryOut,
     SoftwareSummaryOut,
 )
-from routers.auth import get_current_user, verify_password
+from routers.auth import get_current_user, verify_password, get_password_hash, password_hash_needs_upgrade
 from routers._account_messages import AccountMessages
 from routers._account_utils import (
     is_login_email_taken,
@@ -140,7 +140,7 @@ async def read_my_account(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail=AccountMessages.USER_NOT_FOUND)
     return AccountInfoOut(
         name=str(getattr(user_doc, "name", "") or ""),
-        username=user_doc.username,
+        username=str(getattr(user_doc, "username", "") or ""),
         login_email=getattr(user_doc, "login_email", None),
     )
 
@@ -153,6 +153,8 @@ async def update_my_account(req: AccountUpdate, current_user: dict = Depends(get
 
     if not verify_password(req.current_password, user_doc.password_hash):
         raise HTTPException(status_code=400, detail=AccountMessages.CURRENT_PASSWORD_INCORRECT)
+    if password_hash_needs_upgrade(getattr(user_doc, "password_hash", None)):
+        await user_doc.set({"password_hash": get_password_hash(req.current_password)})
 
     name_requested = "name" in req.__fields_set__
     username_requested = "username" in req.__fields_set__

@@ -238,14 +238,13 @@ async function saveAccountInfo() {
     alert(ACCOUNT_MESSAGES.nameRequired)
     return
   }
-  if (!nextUsername) {
-    alert(ACCOUNT_MESSAGES.usernameRequired)
-    return
-  }
-
   const payload: any = { current_password: password }
   if (nextName !== accountSnapshot.value.name)
     payload.name = nextName
+  if (nextUsername !== accountSnapshot.value.username && !nextUsername) {
+    alert(ACCOUNT_MESSAGES.usernameRequired)
+    return
+  }
   if (nextUsername !== accountSnapshot.value.username)
     payload.username = nextUsername
   if (nextEmail !== accountSnapshot.value.login_email)

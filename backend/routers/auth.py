@@ -1,4 +1,6 @@
 import os
+import hashlib
+import hmac
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -23,7 +25,10 @@ except ValueError:
     ACCESS_TOKEN_EXPIRE_MINUTES = 300
 
 # Password Context
-pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256", "bcrypt", "sha256_crypt", "django_pbkdf2_sha256"],
+    deprecated="auto",
+)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
 
@@ -31,8 +36,39 @@ router = APIRouter()
 
 # --- Utilities ---
 def verify_password(plain_password, hashed_password):
-    if not hashed_password: return False
-    return pwd_context.verify(plain_password, hashed_password)
+    if not plain_password or not hashed_password:
+        return False
+
+    # Modern hashes handled by passlib context.
+    try:
+        if pwd_context.verify(plain_password, hashed_password):
+            return True
+    except Exception:
+        # Fall through to legacy compatibility checks.
+        pass
+
+    # Legacy plaintext compatibility.
+    plain = str(plain_password)
+    stored = str(hashed_password)
+    if hmac.compare_digest(stored, plain):
+        return True
+
+    # Legacy digest compatibility.
+    digest_candidates = (
+        hashlib.md5(plain.encode("utf-8")).hexdigest(),
+        hashlib.sha1(plain.encode("utf-8")).hexdigest(),
+        hashlib.sha256(plain.encode("utf-8")).hexdigest(),
+    )
+    stored_lower = stored.lower()
+    return any(hmac.compare_digest(stored_lower, digest) for digest in digest_candidates)
+
+
+def password_hash_needs_upgrade(hashed_password: Optional[str]) -> bool:
+    if not hashed_password:
+        return True
+    if str(hashed_password).startswith(("$pbkdf2-sha256$", "$2a$", "$2b$", "$2y$", "$5$", "pbkdf2_sha256$")):
+        return False
+    return True
 
 def get_password_hash(password):
     return pwd_context.hash(password)
@@ -115,6 +151,11 @@ async def login_for_access_token(form_data: LoginRequest):
             detail=AccountMessages.LOGIN_INVALID_CREDENTIALS,
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Opportunistic migration for legacy password storage.
+    if password_hash_needs_upgrade(getattr(user, "password_hash", None)):
+        user.password_hash = get_password_hash(form_data.password)
+        await user.save()
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(

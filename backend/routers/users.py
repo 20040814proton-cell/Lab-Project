@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Union
-from models import Student, Teacher, SuperAdmin, UserRole, ForumPost, ForumComment, Activity, Project, Software
+from models import Student, Teacher, SuperAdmin, ForumPost, ForumComment, Activity, Project, Software
 from schemas import (
     StudentOut,
     TeacherOut,
     SuperAdminOut,
     UserUpdate,
+    AccountInfoOut,
+    AccountUpdate,
+    AccountUpdateOut,
     PublicUserOut,
     UserContributionsOut,
     ContributionCountsOut,
@@ -15,7 +18,16 @@ from schemas import (
     ProjectSummaryOut,
     SoftwareSummaryOut,
 )
-from routers.auth import get_current_user
+from routers.auth import get_current_user, verify_password
+from routers._account_messages import AccountMessages
+from routers._account_utils import (
+    is_login_email_taken,
+    is_username_taken,
+    model_for_role,
+    normalize_login_email,
+    normalize_username,
+    is_valid_username,
+)
 from beanie import PydanticObjectId
 
 router = APIRouter()
@@ -28,6 +40,15 @@ async def find_user_by_username(username: str):
     if user:
         return user
     return await SuperAdmin.find_one({"username": username})
+
+
+async def get_current_user_doc(current_user: dict):
+    role = current_user['role']
+    uid = current_user['id']
+    model = model_for_role(role)
+    if model is None:
+        return None
+    return await model.get(uid)
 
 def as_public_user(user) -> PublicUserOut:
     raw_user_role = getattr(user, 'user_role', '')
@@ -50,6 +71,17 @@ def make_preview(text: str, max_len: int = 120) -> str:
     if len(normalized) <= max_len:
         return normalized
     return f"{normalized[:max_len]}..."
+
+
+async def sync_username_references(user_id: str, old_username: str, new_username: str):
+    forum_query = {"$or": [{"author_id": user_id}, {"author_name": old_username}]}
+    owner_query = {"$or": [{"created_by_id": user_id}, {"created_by_username": old_username}]}
+
+    await ForumPost.find(forum_query).update({"$set": {"author_name": new_username}})
+    await ForumComment.find(forum_query).update({"$set": {"author_name": new_username}})
+    await Activity.find(owner_query).update({"$set": {"created_by_username": new_username}})
+    await Project.find(owner_query).update({"$set": {"created_by_username": new_username}})
+    await Software.find(owner_query).update({"$set": {"created_by_username": new_username}})
 
 @router.get("/", response_model=List[Union[TeacherOut, StudentOut, SuperAdminOut]])
 async def get_users(role: str = Query(None)):
@@ -83,57 +115,115 @@ async def get_users(role: str = Query(None)):
 
 @router.get("/me", response_model=Union[TeacherOut, StudentOut, SuperAdminOut])
 async def read_users_me(current_user: dict = Depends(get_current_user)):
-    uid = current_user['id']
-    role = current_user['role']
-
-    if role == UserRole.TEACHER:
-        user = await Teacher.get(uid)
-    elif role == UserRole.STUDENT:
-        user = await Student.get(uid)
-    elif role == UserRole.SUPERADMIN:
-        user = await SuperAdmin.get(uid)
-    else:
-        user = await Teacher.get(uid)
+    user = await get_current_user_doc(current_user)
 
     if not user:
-        user = await Student.get(uid)
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail=AccountMessages.USER_NOT_FOUND)
 
     return user
 
 @router.put("/me", response_model=Union[TeacherOut, StudentOut, SuperAdminOut])
 async def update_my_profile(req: UserUpdate, current_user: dict = Depends(get_current_user)):
-    role = current_user['role']
-    uid = current_user['id']
-
-    user_doc = None
-    if role == UserRole.STUDENT:
-        user_doc = await Student.get(uid)
-    elif role == UserRole.TEACHER:
-        user_doc = await Teacher.get(uid)
-    elif role == UserRole.SUPERADMIN:
-        user_doc = await SuperAdmin.get(uid)
+    user_doc = await get_current_user_doc(current_user)
 
     if not user_doc:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail=AccountMessages.USER_NOT_FOUND)
 
     await user_doc.set(req.dict(exclude_unset=True))
     return user_doc
+
+
+@router.get("/me/account", response_model=AccountInfoOut)
+async def read_my_account(current_user: dict = Depends(get_current_user)):
+    user_doc = await get_current_user_doc(current_user)
+    if not user_doc:
+        raise HTTPException(status_code=404, detail=AccountMessages.USER_NOT_FOUND)
+    return AccountInfoOut(
+        name=str(getattr(user_doc, "name", "") or ""),
+        username=user_doc.username,
+        login_email=getattr(user_doc, "login_email", None),
+    )
+
+
+@router.put("/me/account", response_model=AccountUpdateOut)
+async def update_my_account(req: AccountUpdate, current_user: dict = Depends(get_current_user)):
+    user_doc = await get_current_user_doc(current_user)
+    if not user_doc:
+        raise HTTPException(status_code=404, detail=AccountMessages.USER_NOT_FOUND)
+
+    if not verify_password(req.current_password, user_doc.password_hash):
+        raise HTTPException(status_code=400, detail=AccountMessages.CURRENT_PASSWORD_INCORRECT)
+
+    name_requested = "name" in req.__fields_set__
+    username_requested = "username" in req.__fields_set__
+    login_email_requested = "login_email" in req.__fields_set__
+    if not name_requested and not username_requested and not login_email_requested:
+        raise HTTPException(status_code=400, detail=AccountMessages.NO_ACCOUNT_UPDATE_FIELDS)
+
+    old_name = str(getattr(user_doc, "name", "") or "").strip()
+    old_username = str(user_doc.username or "")
+    old_login_email = normalize_login_email(getattr(user_doc, "login_email", None))
+
+    next_name = old_name
+    if name_requested:
+        next_name = str(req.name or "").strip()
+        if not next_name:
+            raise HTTPException(status_code=400, detail=AccountMessages.NAME_REQUIRED)
+
+    next_username = old_username
+    if username_requested:
+        next_username = normalize_username(req.username)
+        if not next_username:
+            raise HTTPException(status_code=400, detail=AccountMessages.USERNAME_REQUIRED)
+        if not is_valid_username(next_username):
+            raise HTTPException(status_code=400, detail=AccountMessages.USERNAME_INVALID)
+        if next_username.lower() != old_username.lower() and await is_username_taken(next_username, exclude_user_id=str(user_doc.id)):
+            raise HTTPException(status_code=400, detail=AccountMessages.USERNAME_EXISTS)
+
+    next_login_email = old_login_email
+    if login_email_requested:
+        next_login_email = normalize_login_email(str(req.login_email)) if req.login_email is not None else None
+        if next_login_email and await is_login_email_taken(next_login_email, exclude_user_id=str(user_doc.id)):
+            raise HTTPException(status_code=400, detail=AccountMessages.LOGIN_EMAIL_EXISTS)
+
+    name_changed = next_name != old_name
+    username_changed = next_username != old_username
+    login_email_changed = next_login_email != old_login_email
+    if not name_changed and not username_changed and not login_email_changed:
+        raise HTTPException(status_code=400, detail=AccountMessages.NO_ACCOUNT_UPDATE_FIELDS)
+
+    payload = {}
+    if name_changed:
+        payload["name"] = next_name
+    if username_changed:
+        payload["username"] = next_username
+    if login_email_requested:
+        payload["login_email"] = next_login_email
+
+    await user_doc.set(payload)
+
+    if username_changed:
+        await sync_username_references(str(user_doc.id), old_username, next_username)
+
+    return AccountUpdateOut(
+        name=next_name,
+        username=next_username,
+        login_email=next_login_email,
+        reauth_required=username_changed,
+    )
 
 @router.get("/public/{username}", response_model=PublicUserOut)
 async def read_user_public_profile(username: str):
     user = await find_user_by_username(username)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail=AccountMessages.USER_NOT_FOUND)
     return as_public_user(user)
 
 @router.get("/public/{username}/contributions", response_model=UserContributionsOut)
 async def read_user_contributions(username: str, limit: int = Query(5, ge=1, le=10)):
     user = await find_user_by_username(username)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail=AccountMessages.USER_NOT_FOUND)
 
     user_id = str(user.id)
     forum_query = {"$or": [{"author_id": user_id}, {"author_name": username}, {"author_id": username}]}

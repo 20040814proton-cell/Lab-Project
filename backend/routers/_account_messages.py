@@ -1,0 +1,22 @@
+class AccountMessages:
+    LOGIN_IDENTIFIER_REQUIRED = "请输入登录标识和密码。"
+    LOGIN_INVALID_CREDENTIALS = "账号、邮箱或密码错误。"
+    LOGIN_NAME_DUPLICATE = "姓名重复，请使用账号或登录邮箱。"
+
+    USER_NOT_FOUND = "用户不存在。"
+    NAME_REQUIRED = "姓名不能为空。"
+    USERNAME_REQUIRED = "用户名不能为空。"
+    USERNAME_INVALID = "用户名需为 3-32 位，仅支持字母、数字、点、下划线、短横线。"
+    USERNAME_EXISTS = "用户名已存在。"
+    LOGIN_EMAIL_REQUIRED = "请输入登录邮箱。"
+    LOGIN_EMAIL_EXISTS = "登录邮箱已存在。"
+    CURRENT_PASSWORD_INCORRECT = "当前密码不正确。"
+    NO_ACCOUNT_UPDATE_FIELDS = "未检测到可更新的账号信息。"
+
+    INVITE_CODE_REQUIRED = "请输入邀请码。"
+    INVITE_CODE_INVALID = "邀请码无效。"
+    INVITE_CODE_EXPIRED = "邀请码已过期。"
+    INVITE_CODE_EXHAUSTED = "邀请码使用次数已耗尽。"
+    INVITE_ROLE_MISMATCH = "邀请码角色不匹配。"
+    STUDENT_GRADE_REQUIRED = "学生注册必须选择年级。"
+    INVALID_ROLE = "无效角色。"

@@ -3,6 +3,7 @@ uvicorn
 motor>=3.4.0
 beanie
 pydantic
+email-validator
 python-multipart
 passlib[bcrypt]
 python-jose[cryptography]

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from beanie import PydanticObjectId
 from datetime import datetime
@@ -32,6 +32,26 @@ class UserUpdate(BaseModel):
     office: Optional[str] = None
     public_email: Optional[str] = None
     research_areas: List[str] = []
+
+
+class AccountInfoOut(BaseModel):
+    name: str
+    username: str
+    login_email: Optional[str] = None
+
+
+class AccountUpdate(BaseModel):
+    name: Optional[str] = None
+    username: Optional[str] = None
+    login_email: Optional[EmailStr] = None
+    current_password: str
+
+
+class AccountUpdateOut(BaseModel):
+    name: str
+    username: str
+    login_email: Optional[str] = None
+    reauth_required: bool = False
 
 class TeacherOut(BaseModel):
     id: PydanticObjectId

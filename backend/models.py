@@ -13,6 +13,7 @@ class UserRole(str, Enum):
 
 class Student(Document):
     username: Optional[str] = "student" # Default for legacy data or optional
+    login_email: Optional[str] = None
     password_hash: Optional[str] = None
     name: str
     grade: Optional[int] = None # e.g. 2025
@@ -34,6 +35,7 @@ class Student(Document):
 
 class Teacher(Document):
     username: str
+    login_email: Optional[str] = None
     password_hash: Optional[str] = None
     name: str
     desc: str
@@ -57,6 +59,7 @@ class Teacher(Document):
 
 class SuperAdmin(Document):
     username: str
+    login_email: Optional[str] = None
     password_hash: Optional[str] = None
     name: str
     desc: str = "Super Admin"

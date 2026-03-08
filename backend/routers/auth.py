@@ -7,6 +7,12 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from models import Student, Teacher, SuperAdmin, UserRole
+from routers._account_messages import AccountMessages
+from routers._account_utils import (
+    find_user_by_login_identifier,
+    find_user_by_name_identifier,
+    normalize_username,
+)
 
 # Configuration
 SECRET_KEY = os.getenv("LAB_JWT_SECRET", "ink_hub_lab_secret_key_change_this_in_production")
@@ -44,7 +50,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        detail=AccountMessages.LOGIN_INVALID_CREDENTIALS,
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
@@ -87,18 +93,26 @@ class LoginRequest(BaseModel):
 
 @router.post("/token", response_model=Token)
 async def login_for_access_token(form_data: LoginRequest):
-    user = None
-    if form_data.role == UserRole.STUDENT:
-        user = await Student.find_one({"username": form_data.username})
-    elif form_data.role == UserRole.TEACHER:
-        user = await Teacher.find_one({"username": form_data.username})
-    elif form_data.role == UserRole.SUPERADMIN:
-        user = await SuperAdmin.find_one({"username": form_data.username})
+    identifier = normalize_username(form_data.username)
+    if not identifier or not form_data.password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=AccountMessages.LOGIN_IDENTIFIER_REQUIRED,
+        )
+
+    user = await find_user_by_login_identifier(form_data.role, identifier)
+    if not user:
+        user, name_duplicated = await find_user_by_name_identifier(form_data.role, identifier)
+        if name_duplicated:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=AccountMessages.LOGIN_NAME_DUPLICATE,
+            )
     
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail=AccountMessages.LOGIN_INVALID_CREDENTIALS,
             headers={"WWW-Authenticate": "Bearer"},
         )
     
